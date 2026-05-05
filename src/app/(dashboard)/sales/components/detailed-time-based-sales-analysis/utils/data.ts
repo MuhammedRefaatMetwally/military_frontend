@@ -1,4 +1,76 @@
 import { AnalyticsTableHeader } from "@/components/ui/AnalyticsTable";
+import type { DetailedTimeSalesItem, SalesAnalysisListResponse } from "@/api/sales-analyses/types";
+
+
+const MONTH_LABELS: Record<number, string> = {
+  1: "يناير", 2: "فبراير", 3: "مارس", 4: "أبريل",
+  5: "مايو", 6: "يونيو", 7: "يوليو", 8: "أغسطس",
+  9: "سبتمبر", 10: "أكتوبر", 11: "نوفمبر", 12: "ديسمبر",
+};
+
+const MONTH_ORDER_LABELS: Record<number, string> = {
+  1: "الشهر الأول", 2: "الشهر الثاني", 3: "الشهر الثالث",
+};
+
+const QUARTER_LABELS: Record<number, string> = {
+  1: "الربع الأول", 2: "الربع الثاني",
+  3: "الربع الثالث", 4: "الربع الرابع",
+};
+
+// Month position within its quarter (1–3)
+function monthPositionInQuarter(month: number): number {
+  return ((month - 1) % 3) + 1;
+}
+
+export function transformDetailedTimeSales(
+  response: SalesAnalysisListResponse,
+): SalesAnalysisYear[] {
+  // Group flat rows by year → quarter → month
+  const yearMap = new Map<number, Map<number, DetailedTimeSalesItem[]>>();
+
+  for (const item of response.data as DetailedTimeSalesItem[]) {
+    if (!yearMap.has(item.year)) yearMap.set(item.year, new Map());
+    const quarterMap = yearMap.get(item.year)!;
+    if (!quarterMap.has(item.quarter)) quarterMap.set(item.quarter, []);
+    quarterMap.get(item.quarter)!.push(item);
+  }
+
+  // Sort years descending (most recent first — matches mock order)
+  const sortedYears = [...yearMap.keys()].sort((a, b) => b - a);
+
+  return sortedYears.map((year) => {
+    const quarterMap = yearMap.get(year)!;
+    const sortedQuarters = [...quarterMap.keys()].sort((a, b) => a - b);
+
+    const quarters: SalesAnalysisQuarter[] = sortedQuarters.map((q) => {
+      const months = quarterMap
+        .get(q)!
+        .sort((a, b) => a.month - b.month)
+        .map((item): SalesAnalysisMonth => ({
+          id: `m${item.month}`,
+          label: MONTH_LABELS[item.month] ?? String(item.month),
+          monthOrderLabel:
+            MONTH_ORDER_LABELS[monthPositionInQuarter(item.month)] ?? "",
+          net: item.net_sales,
+          netYoyPrior: item.net_sales_yoy ?? null,
+          mom: item.mom_growth_pct ?? null,
+          invoices: item.invoice_count,
+          margin: item.profit_margin_pct,
+        }));
+
+      return {
+        id: `q${q}`,
+        label: QUARTER_LABELS[q] ?? `Q${q}`,
+        months,
+      };
+    });
+
+    return {
+      year: String(year),
+      quarters,
+    };
+  });
+}
 
 export type SalesAnalysisMonth = {
   id: string;

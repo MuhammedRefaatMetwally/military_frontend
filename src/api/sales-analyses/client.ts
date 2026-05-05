@@ -13,10 +13,10 @@ import type {
 
 const SALES_ANALYSES_BASE = "/api/datasorce/sales-analyses";
 
-const toCsv = (values?: Array<string | number>) =>
+export const toCsv = (values?: Array<string | number>) =>
   values && values.length > 0 ? values.join(",") : undefined;
 
-const withDefinedParams = (params: Record<string, unknown>) =>
+export const withDefinedParams = (params: Record<string, unknown>) =>
   Object.fromEntries(
     Object.entries(params).filter(
       ([, value]) => value !== undefined && value !== null && value !== "",

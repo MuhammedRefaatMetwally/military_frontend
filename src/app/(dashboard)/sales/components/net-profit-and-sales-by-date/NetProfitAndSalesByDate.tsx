@@ -193,23 +193,18 @@ const NetProfitAndSalesByDate = () => {
   ];
 
   const getLabel = (point: (typeof chartData)[0]): string => {
-    if (level === "month" && "month" in point)
-      return ARABIC_MONTHS[((point as { month: number }).month ?? 1) - 1] ?? String((point as { month: number }).month);
-    if (level === "quarter" && "quarter" in point)
-      return `Q${(point as { quarter: number }).quarter}`;
+    // Trust our own `level` — response fields mirror what we sent
+    if (level === "month" && point.month != null)
+      return ARABIC_MONTHS[point.month - 1] ?? String(point.month);
+    if (level === "quarter" && point.quarter != null)
+      return `Q${point.quarter}`;
     return String(point.year);
   };
 
   const { labels, salesValues, profitValues } = useMemo(() => {
     const sorted = [...chartData].sort((a, b) => {
-      // sort by year first, then by quarter/month if present
-      if (a.year !== b.year) return a.year - b.year;
-      const aQ = "quarter" in a ? (a as { quarter: number }).quarter : 0;
-      const bQ = "quarter" in b ? (b as { quarter: number }).quarter : 0;
-      if (aQ !== bQ) return aQ - bQ;
-      const aM = "month" in a ? (a as { month: number }).month : 0;
-      const bM = "month" in b ? (b as { month: number }).month : 0;
-      return aM - bM;
+      // period_start is always a valid ISO date — fastest reliable sort key
+      return (a.period_start ?? "").localeCompare(b.period_start ?? "");
     });
     return {
       labels: sorted.map(getLabel),
