@@ -7,52 +7,65 @@ import {
   ShoppingCart,
   TrendingUp,
 } from "lucide-react";
-const salesData = getMonthlySalesData();
+import type { SalesStatItem, SalesStatsSummary } from "../types";
 
-const totalOrders = salesData.reduce((a, b) => a + b.orders, 0);
-const totalRevenue = salesData.reduce((a, b) => a + b.revenue, 0);
-const totalCost = Math.round(totalRevenue * 0.65);
-const totalDiscount = Math.round(totalRevenue * 0.073);
-export const salesStats = [
+export const getFallbackSalesStatsSummary = (): SalesStatsSummary => {
+  const salesData = getMonthlySalesData();
+  const totalOrders = salesData.reduce((a, b) => a + b.orders, 0);
+  const totalRevenue = salesData.reduce((a, b) => a + b.revenue, 0);
+  const totalCost = Math.round(totalRevenue * 0.65);
+  const totalDiscount = Math.round(totalRevenue * 0.073);
+
+  return {
+    totalRevenue,
+    totalCost,
+    totalDiscount,
+    branchesCount: 47,
+    invoicesCount: totalOrders,
+    averageBasket: totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0,
+  };
+};
+
+export const buildSalesStatItems = (summary: SalesStatsSummary): SalesStatItem[] => [
   {
     icon: DollarSign,
     label: "تكلفة المواد",
-    value: `${(totalCost / 1000000).toFixed(1)}M`,
+    value: `${(summary.totalCost / 1000000).toFixed(1)}M`,
     sublabel: "د.أ",
     color: "var(--accent-red)",
   },
   {
     icon: TrendingUp,
     label: "قيمة المبيعات",
-    value: `${(totalRevenue / 1000000).toFixed(1)}M`,
+    value: `${(summary.totalRevenue / 1000000).toFixed(1)}M`,
     sublabel: "د.أ",
     color: "var(--accent-green)",
   },
   {
     icon: BarChart3,
     label: "قيمة الخصومات",
-    value: `${(totalDiscount / 1000000).toFixed(2)}M`,
+    value: `${(summary.totalDiscount / 1000000).toFixed(2)}M`,
     sublabel: "د.أ",
     color: "var(--accent-amber)",
   },
   {
     icon: Building2,
     label: "عدد الفروع",
-    value: "47",
+    value: summary.branchesCount.toString(),
     sublabel: "فرع نشط",
     color: "var(--accent-blue)",
   },
   {
     icon: FileText,
     label: "عدد الفواتير",
-    value: totalOrders.toLocaleString("en-US"),
+    value: summary.invoicesCount.toLocaleString("en-US"),
     sublabel: "فاتورة",
     color: "var(--accent-cyan)",
   },
   {
     icon: ShoppingCart,
     label: "متوسط السلة",
-    value: `${Math.round(totalRevenue / totalOrders)}`,
+    value: `${summary.averageBasket}`,
     sublabel: "د.أ / فاتورة",
     color: "var(--accent-purple)",
   },

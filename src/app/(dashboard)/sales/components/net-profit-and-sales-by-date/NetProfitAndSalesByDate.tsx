@@ -1,17 +1,29 @@
+"use client";
+
 import { useResolvedAnalyticsPalette } from "@/hooks/useResolvedAnalyticsPalette";
-import axiosInstance from "@/api/axiosInstance";
+import { useNetSalesProfitChart } from "@/hooks/useSalesAnalyses";
 import { useFilterStore } from "@/store/filterStore";
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
 
 const ChartCard = dynamic(
   () => import("@/components/ui/chart-card/ChartCard"),
-  {
-    ssr: false,
-    loading: () => <Skeleton variant="chart" />,
-  },
+  { ssr: false, loading: () => <Skeleton variant="chart" /> },
 );
+
+// ─── helpers ────────────────────────────────────────────────────────────────
+
+const normalizeSelections = (values: string[]) =>
+  values.filter((v) => v && v !== "all");
+
+/** Parse a numeric string; returns undefined when invalid / empty */
+const toInt = (s: string): number | undefined => {
+  const n = Number.parseInt(s, 10);
+  return Number.isNaN(n) || s === "" ? undefined : n;
+};
+
+// ─── y-axis definitions (stable references) ─────────────────────────────────
 
 const salesYAxis = {
   type: "value" as const,
@@ -19,12 +31,10 @@ const salesYAxis = {
   position: "left" as const,
   min: 0,
   axisLine: { show: true, onZero: false },
-  axisTick: { show: true }, // ✅ ADD
-  splitLine: { show: true }, // ✅ ADD
-  axisLabel: {
-    formatter: (v: number) => `${(v / 1000000).toFixed(1)}M`,
-  },
-  nameLocation: "end",
+  axisTick: { show: true },
+  splitLine: { show: true },
+  axisLabel: { formatter: (v: number) => `${(v / 1_000_000).toFixed(1)}M` },
+  nameLocation: "end" as const,
   nameGap: 12,
   gridIndex: 0,
 };
@@ -35,151 +45,197 @@ const profitYAxis = {
   position: "right" as const,
   min: 0,
   axisLine: { show: true, onZero: false },
-  axisTick: { show: true }, // ✅ ADD
-  splitLine: { show: false }, // ✅ prevent clutter
-  axisLabel: {
-    formatter: (v: number) => `${(v / 1000000).toFixed(1)}M`,
-  },
-  nameLocation: "end",
+  axisTick: { show: true },
+  splitLine: { show: false },
+  axisLabel: { formatter: (v: number) => `${(v / 1_000_000).toFixed(1)}M` },
+  nameLocation: "end" as const,
   nameGap: 12,
   gridIndex: 0,
 };
 
-type ChartLevel = "year" | "quarter" | "month";
-type ChartIndicator = "both" | "sales" | "profit";
+const drillGrid = {
+  left: "5%" as const,
+  right: "6%" as const,
+  top: "14%",
+  bottom: "18%",
+  containLabel: true,
+};
 
-interface NetSalesProfitPoint {
-  year: number;
-  quarter: number | null;
-  month: number | null;
-  period_start: string;
-  sales: number;
-  profit: number;
-}
+// ─── component ───────────────────────────────────────────────────────────────
 
-interface NetSalesProfitApiResponse {
-  level: ChartLevel;
-  indicator: ChartIndicator;
-  years: number[];
-  period: number | null;
-  data: NetSalesProfitPoint[];
-}
+const NetProfitAndSalesByDate = () => {
+  const [seriesMode, setSeriesMode] = useState<"both" | "sales" | "profit">(
+    "both",
+  );
+  const palette = useResolvedAnalyticsPalette();
 
-interface FetchNetSalesProfitParams {
-  year: number;
-  regionIds: string[];
-  branchIds: string[];
-  group1Ids: string[];
-  group2Ids: string[];
-  group3Ids: string[];
-  agreementId: string;
-}
+  // ── read filter store ──────────────────────────────────────────────────────
+  const storeYear = useFilterStore((s) => s.year);
+  const storeQuarter = useFilterStore((s) => s.quarter);
+  const storeMonth = useFilterStore((s) => s.month);
+  const region = useFilterStore((s) => s.region);
+  const activeBranches = useFilterStore((s) => s.activeBranches);
+  const productCategory = useFilterStore((s) => s.productCategory);
+  const subcategory = useFilterStore((s) => s.subcategory);
+  const product = useFilterStore((s) => s.product);
+  const agreement = useFilterStore((s) => s.agreement);
 
-const toCsv = (items: string[]) => items.join(",");
+  // ── derive API-level params from the date filter ───────────────────────────
+  //
+  //  The GlobalFilterBar writes to filterStore:
+  //    year    → "2024"  (always present when a date is selected)
+  //    quarter → "1".."4" | ""
+  //    month   → "01".."12" | ""
+  //    day     → "01".."31" | ""   (API doesn't support day → treat as month)
+  //
+  //  Priority: month (or day) → quarter → year
+  //
+  const yearNum = toInt(storeYear);
+  const monthNum = toInt(storeMonth);
+  const quarterNum = toInt(storeQuarter);
 
-const fetchNetSalesProfitChart = async ({
-  year,
-  regionIds,
-  branchIds,
-  group1Ids,
-  group2Ids,
-  group3Ids,
-  agreementId,
-}: FetchNetSalesProfitParams): Promise<NetSalesProfitApiResponse> => {
-  const response = await axiosInstance.get<NetSalesProfitApiResponse>(
-    "/api/datasorce/sales-analyses/net-sales-profit-chart",
+  /**
+   * level:  "month"   when a month (or day) is selected
+   *         "quarter" when only a quarter is selected
+   *         "year"    otherwise
+   */
+  const level: "year" | "quarter" | "month" = useMemo(() => {
+    if (monthNum !== undefined) return "month";
+    if (quarterNum !== undefined) return "quarter";
+    return "year";
+  }, [monthNum, quarterNum]);
+
+  /**
+   * years: always an array of the selected year (or empty → skip query)
+   */
+  const years = useMemo(
+    () => (yearNum !== undefined ? [yearNum] : []),
+    [yearNum],
+  );
+
+  /**
+   * period:
+   *   level=month   → [monthNum]         (required)
+   *   level=quarter → [quarterNum]        (optional but sent when available)
+   *   level=year    → undefined           (not applicable)
+   */
+  const period = useMemo<number[] | undefined>(() => {
+    if (level === "month" && monthNum !== undefined) return [monthNum];
+    if (level === "quarter" && quarterNum !== undefined) return [quarterNum];
+    return undefined;
+  }, [level, monthNum, quarterNum]);
+
+  /**
+   * agreementId: first real value from the agreement array (no hardcoded fallback)
+   */
+  const agreementId = useMemo(
+    () => normalizeSelections(agreement)[0],
+    [agreement],
+  );
+
+  // ── query enabled guard ────────────────────────────────────────────────────
+  // Must have at least a valid year; month level also requires period.
+  const enabled =
+    years.length > 0 &&
+    (level !== "month" || period !== undefined);
+
+  // ── build params (stable object for react-query key) ──────────────────────
+  const chartParams = useMemo(
+    () => ({
+      level,
+      years,
+      period,
+      regionIds: normalizeSelections(region),
+      branchIds: normalizeSelections(activeBranches),
+      group1Ids: normalizeSelections(productCategory),
+      group2Ids: normalizeSelections(subcategory),
+      group3Ids: normalizeSelections(product),
+      agreementId,
+      indicator: seriesMode, // "both" | "sales" | "profit"
+    }),
+    [
+      level,
+      years,
+      period,
+      region,
+      activeBranches,
+      productCategory,
+      subcategory,
+      product,
+      agreementId,
+      seriesMode,
+    ],
+  );
+
+  // ── fetch ──────────────────────────────────────────────────────────────────
+  const { data, isLoading, isFetching, isError } = useNetSalesProfitChart(
+    chartParams,
     {
-      params: {
-        level: "year",
-        years: year,
-        indicator: "both",
-        period: "",
-        region: toCsv(regionIds),
-        branch: toCsv(branchIds),
-        group1: toCsv(group1Ids),
-        group2: toCsv(group2Ids),
-        group3: toCsv(group3Ids),
-        agreement: agreementId,
-      },
+      enabled,
+      staleTime: 60_000,
+      gcTime: 5 * 60_000,
+      refetchOnWindowFocus: false,
     },
   );
 
-  return response.data;
-};
+  // ── derive chart data ──────────────────────────────────────────────────────
+  const chartData = data?.data ?? [];
 
-const NetProfitAndSalesByDate = () => {
-  const [drillSeriesMode, setDrillSeriesMode] = useState<
-    "both" | "sales" | "profit"
-  >("both");
-  const [chartData, setChartData] = useState<NetSalesProfitPoint[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState("");
-  const palette = useResolvedAnalyticsPalette();
-  const year = useFilterStore((state) => state.year);
-  const region = useFilterStore((state) => state.region);
-  const activeBranches = useFilterStore((state) => state.activeBranches);
-  const productCategory = useFilterStore((state) => state.productCategory);
-  const subcategory = useFilterStore((state) => state.subcategory);
-  const product = useFilterStore((state) => state.product);
-  const agreement = useFilterStore((state) => state.agreement);
+  /**
+   * x-axis labels depend on the level:
+   *   year    → "2022", "2023" …
+   *   quarter → "Q1", "Q2" …
+   *   month   → "يناير", "فبراير" …
+   */
+  const ARABIC_MONTHS = [
+    "يناير", "فبراير", "مارس", "إبريل", "مايو", "يونيو",
+    "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر",
+  ];
 
-  useEffect(() => {
-    const selectedYear = Number.parseInt(year, 10);
-    const agreementId = agreement[0] || "79";
+  const getLabel = (point: (typeof chartData)[0]): string => {
+    if (level === "month" && "month" in point)
+      return ARABIC_MONTHS[((point as { month: number }).month ?? 1) - 1] ?? String((point as { month: number }).month);
+    if (level === "quarter" && "quarter" in point)
+      return `Q${(point as { quarter: number }).quarter}`;
+    return String(point.year);
+  };
 
-    if (Number.isNaN(selectedYear)) {
-      setChartData([]);
-      setIsLoading(false);
-      setErrorMessage("سنة غير صالحة");
-      return;
-    }
-
-    let cancelled = false;
-    setIsLoading(true);
-    setErrorMessage("");
-
-    fetchNetSalesProfitChart({
-      year: selectedYear,
-      regionIds: region,
-      branchIds: activeBranches,
-      group1Ids: productCategory,
-      group2Ids: subcategory,
-      group3Ids: product,
-      agreementId,
-    })
-      .then((result) => {
-        if (cancelled) return;
-        setChartData(result.data ?? []);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setChartData([]);
-        setErrorMessage("تعذر تحميل بيانات المبيعات والأرباح");
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setIsLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [year, region, activeBranches, productCategory, subcategory, product, agreement]);
-
-  const drillData = useMemo(() => {
-    const sorted = [...chartData].sort((a, b) => a.year - b.year);
+  const { labels, salesValues, profitValues } = useMemo(() => {
+    const sorted = [...chartData].sort((a, b) => {
+      // sort by year first, then by quarter/month if present
+      if (a.year !== b.year) return a.year - b.year;
+      const aQ = "quarter" in a ? (a as { quarter: number }).quarter : 0;
+      const bQ = "quarter" in b ? (b as { quarter: number }).quarter : 0;
+      if (aQ !== bQ) return aQ - bQ;
+      const aM = "month" in a ? (a as { month: number }).month : 0;
+      const bM = "month" in b ? (b as { month: number }).month : 0;
+      return aM - bM;
+    });
     return {
-      labels: sorted.map((item) => item.year.toString()),
-      values: sorted.map((item) => item.sales),
-      profits: sorted.map((item) => item.profit),
+      labels: sorted.map(getLabel),
+      salesValues: sorted.map((p) => p.sales),
+      profitValues: sorted.map((p) => p.profit),
     };
-  }, [chartData]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chartData, level]);
+
+  // ── series definitions ─────────────────────────────────────────────────────
+  const xAxis = { type: "category" as const, data: labels };
+
+  const salesBarSeries = {
+    name: "المبيعات",
+    type: "bar" as const,
+    data: salesValues.map((v, i) => [i, v]),
+    barWidth: 40,
+    itemStyle: { color: palette.primaryGreen, borderRadius: [4, 4, 0, 0] as [number, number, number, number] },
+    yAxisIndex: 0,
+  };
 
   const profitLineSeries = {
     name: "الأرباح",
     type: "line" as const,
-    yAxisIndex: drillSeriesMode === "both" ? 1 : 0,
-    data: drillData.profits.map((v, i) => [i, v]),
+    data: profitValues.map((v, i) => [i, v]),
+    yAxisIndex: seriesMode === "both" ? 1 : 0,
     lineStyle: { color: palette.primaryCyan, width: 2.5 },
     itemStyle: { color: palette.primaryCyan, borderWidth: 2 },
     symbol: "circle" as const,
@@ -188,74 +244,55 @@ const NetProfitAndSalesByDate = () => {
     areaStyle: { color: "rgba(8,145,178,0.08)" },
   };
 
-  const drillGrid = {
-    left: "5%" as const,
-    right: "6%" as const,
-    top: "14%",
-    bottom: "18%",
-    containLabel: true,
-  };
+  const legend = (names: string[]) => ({
+    data: names,
+    bottom: 0,
+    left: "center" as const,
+    itemGap: 12,
+    textStyle: { color: "#94a3b8", fontSize: 11 },
+  });
 
-  const salesBarSeries = {
-    name: "المبيعات",
-    type: "bar" as const,
-    data: drillData.values.map((v, i) => [i, v]),
-    barWidth: 40,
-    itemStyle: { color: palette.primaryGreen, borderRadius: [4, 4, 0, 0] },
-  };
-  const drillXAxis = { type: "category" as const, data: drillData.labels };
-  const drillDownOption =
-    drillSeriesMode === "both"
-      ? {
-          xAxis: drillXAxis,
-          yAxis: [salesYAxis, profitYAxis],
-          series: [salesBarSeries, profitLineSeries],
-          legend: {
-            data: ["المبيعات", "الأرباح"],
-            bottom: 0,
-            left: "center",
-            itemGap: 12,
-            textStyle: { color: "#94a3b8", fontSize: 11 },
-          },
-          grid: drillGrid,
-        }
-      : drillSeriesMode === "sales"
-        ? {
-            xAxis: drillXAxis,
-            yAxis: salesYAxis,
-            series: [salesBarSeries],
-            legend: {
-              data: ["المبيعات"],
-              bottom: 0,
-              left: "center",
-              itemGap: 12,
-              textStyle: { color: "#94a3b8", fontSize: 11 },
-            },
-            grid: drillGrid,
-          }
-        : {
-            xAxis: drillXAxis,
-            yAxis: profitYAxis,
-            series: [profitLineSeries],
-            legend: {
-              data: ["الأرباح"],
-              bottom: 0,
-              left: "center",
-              itemGap: 12,
-              textStyle: { color: "#94a3b8", fontSize: 11 },
-            },
-            grid: drillGrid,
-          };
+  const option = useMemo(() => {
+    if (seriesMode === "sales")
+      return {
+        xAxis,
+        yAxis: salesYAxis,
+        series: [salesBarSeries],
+        legend: legend(["المبيعات"]),
+        grid: drillGrid,
+      };
+    if (seriesMode === "profit")
+      return {
+        xAxis,
+        yAxis: { ...profitYAxis, position: "left" as const },
+        series: [{ ...profitLineSeries, yAxisIndex: 0 }],
+        legend: legend(["الأرباح"]),
+        grid: drillGrid,
+      };
+    return {
+      xAxis,
+      yAxis: [salesYAxis, profitYAxis],
+      series: [salesBarSeries, profitLineSeries],
+      legend: legend(["المبيعات", "الأرباح"]),
+      grid: drillGrid,
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [labels, salesValues, profitValues, seriesMode, palette]);
 
+  // ── subtitle ───────────────────────────────────────────────────────────────
+  const subtitle = !enabled
+    ? "يرجى تحديد سنة صالحة من الفلتر"
+    : isLoading || isFetching
+      ? "جاري تحميل البيانات..."
+      : isError
+        ? "تعذر تحميل بيانات المبيعات والأرباح"
+        : "البيانات مرتبطة بالفلاتر العامة (السنة، الإقليم، الفروع، المجموعات، الاتفاقية)";
+
+  // ── render ─────────────────────────────────────────────────────────────────
   return (
     <ChartCard
       title="صافي الأرباح والمبيعات حسب التاريخ"
-      subtitle={
-        isLoading
-          ? "جاري تحميل البيانات..."
-          : errorMessage ||
-            "البيانات مرتبطة بالفلاتر العامة (السنة، الإقليم، الفروع، المجموعات، الاتفاقية)"
-      }
+      subtitle={subtitle}
       titleFlag="green"
       titleFlagNumber={1}
       headerExtra={
@@ -277,18 +314,18 @@ const NetProfitAndSalesByDate = () => {
               <button
                 key={mode}
                 type="button"
-                onClick={() => setDrillSeriesMode(mode)}
+                onClick={() => setSeriesMode(mode)}
                 className="px-2 py-1 rounded-md text-[10px] font-medium transition-colors"
                 style={{
                   background:
-                    drillSeriesMode === mode
+                    seriesMode === mode
                       ? "rgba(14,165,233,0.15)"
                       : "var(--bg-elevated)",
                   color:
-                    drillSeriesMode === mode
+                    seriesMode === mode
                       ? palette.primaryCyan
                       : "var(--text-muted)",
-                  border: `1px solid ${drillSeriesMode === mode ? palette.primaryCyan : "var(--border-subtle)"}`,
+                  border: `1px solid ${seriesMode === mode ? palette.primaryCyan : "var(--border-subtle)"}`,
                 }}
               >
                 {label}
@@ -297,7 +334,7 @@ const NetProfitAndSalesByDate = () => {
           </div>
         </div>
       }
-      option={drillDownOption}
+      option={option}
       height="300px"
     />
   );
