@@ -2,6 +2,7 @@
 
 import { useResolvedAnalyticsPalette } from "@/hooks/useResolvedAnalyticsPalette";
 import { useSalesProfitByCategory } from "@/hooks/useSalesAnalyses";
+import type { CategoryRow, SalesProfitByCategoryResponse } from "@/api/sales-analyses";
 import { useFilterStore } from "@/store/filterStore";
 import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
@@ -9,13 +10,9 @@ import { Skeleton } from "@/components/ui/SkeletonLoader";
 
 const ChartCard = dynamic(
   () => import("@/components/ui/chart-card/ChartCard"),
-  {
-    ssr: false,
-    loading: () => <Skeleton variant="chart" />,
-  },
+  { ssr: false, loading: () => <Skeleton variant="chart" /> },
 );
 
-// ─── helpers ─────────────────────────────────────────────────────────────────
 
 const normalizeSelections = (values: string[]) =>
   values.filter((v) => v && v !== "all");
@@ -25,28 +22,14 @@ const toInt = (s: string): number | undefined => {
   return Number.isNaN(n) || s === "" ? undefined : n;
 };
 
-// ─── constants ────────────────────────────────────────────────────────────────
 
-const classificationOptions = [
+const GROUP_OPTIONS = [
   { value: 1, label: "المجموعة الأولى" },
   { value: 2, label: "المجموعة الثانية" },
   { value: 3, label: "المجموعة الثالثة" },
 ] as const;
 
-type GroupLevel = (typeof classificationOptions)[number]["value"];
-
-// ─── API response row type ────────────────────────────────────────────────────
-
-interface CategoryRow {
-  id: number;
-  code: string;
-  name: string;
-  quantity_sold: number;
-  sales: number;
-  profit: number;
-}
-
-// ─── chart constants (stable references outside component) ────────────────────
+type GroupLevel = (typeof GROUP_OPTIONS)[number]["value"];
 
 const EMPTY_OPTION = {
   xAxis: { type: "category" as const, data: [] },
@@ -57,14 +40,14 @@ const EMPTY_OPTION = {
   series: [],
 };
 
-const legend = {
+const CHART_LEGEND = {
   data: ["الكمية المباعة", "قيمة البيع", "الأرباح"],
   bottom: 18,
   left: "center" as const,
   textStyle: { color: "#94a3b8", fontSize: 11 },
 };
 
-const grid = {
+const CHART_GRID = {
   left: "4%",
   right: "5%",
   top: "14%",
@@ -72,7 +55,7 @@ const grid = {
   containLabel: true,
 };
 
-const yAxis = [
+const CHART_Y_AXIS = [
   {
     type: "value" as const,
     name: "الكمية",
@@ -91,20 +74,96 @@ const yAxis = [
     axisLine: { show: true, onZero: false },
     axisTick: { show: true },
     splitLine: { show: false },
-    // Sales values are in millions — format accordingly
     axisLabel: { formatter: (v: number) => `${(v / 1_000_000).toFixed(1)}M` },
     nameLocation: "end" as const,
     nameGap: 12,
   },
 ];
 
-// ─── component ────────────────────────────────────────────────────────────────
+const BAR_RADIUS: [number, number, number, number] = [4, 4, 0, 0];
+
+
+interface GroupSelectorProps {
+  value: GroupLevel;
+  onChange: (v: GroupLevel) => void;
+  disabled: boolean;
+}
+
+function GroupSelector({ value, onChange, disabled }: GroupSelectorProps) {
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap justify-end">
+      <span
+        className="text-[10px] shrink-0 select-none"
+        style={{ color: "var(--text-muted)" }}
+        id="group-label"
+      >
+        التصنيف:
+      </span>
+
+      <div
+        role="radiogroup"
+        aria-labelledby="group-label"
+        className="flex items-center gap-1 flex-wrap"
+        onKeyDown={(e) => {
+          const idx = GROUP_OPTIONS.findIndex((o) => o.value === value);
+          if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+            e.preventDefault();
+            onChange(GROUP_OPTIONS[(idx + 1) % GROUP_OPTIONS.length].value);
+          } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+            e.preventDefault();
+            onChange(
+              GROUP_OPTIONS[(idx - 1 + GROUP_OPTIONS.length) % GROUP_OPTIONS.length].value,
+            );
+          }
+        }}
+      >
+        {GROUP_OPTIONS.map((opt) => {
+          const isActive = value === opt.value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              role="radio"
+              aria-checked={isActive}
+              disabled={disabled}
+              onClick={() => onChange(opt.value)}
+              tabIndex={isActive ? 0 : -1}
+              className="px-2.5 py-1 rounded-md text-[10px] font-medium transition-all duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1"
+              style={{
+                background: isActive
+                  ? "var(--accent-green-dim)"
+                  : "var(--bg-elevated)",
+                color: isActive ? "var(--accent-green)" : "var(--text-muted)",
+                border: `1px solid ${isActive ? "var(--accent-green)" : "var(--border-subtle)"}`,
+                outlineColor: "var(--accent-green)",
+                opacity: disabled ? 0.5 : 1,
+                cursor: disabled ? "not-allowed" : "pointer",
+              }}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {disabled && (
+        <span
+          aria-hidden
+          className="text-[9px] animate-pulse ml-1"
+          style={{ color: "var(--accent-green)" }}
+        >
+          ● ● ●
+        </span>
+      )}
+    </div>
+  );
+}
+
 
 const NetProfitAndSalesByClassification = () => {
   const palette = useResolvedAnalyticsPalette();
   const [groupLevel, setGroupLevel] = useState<GroupLevel>(2);
 
-  // ── filter store ───────────────────────────────────────────────────────────
   const storeYear       = useFilterStore((s) => s.year);
   const storeQuarter    = useFilterStore((s) => s.quarter);
   const storeMonth      = useFilterStore((s) => s.month);
@@ -115,7 +174,6 @@ const NetProfitAndSalesByClassification = () => {
   const product         = useFilterStore((s) => s.product);
   const agreement       = useFilterStore((s) => s.agreement);
 
-  // ── derive level / years / period ─────────────────────────────────────────
   const yearNum    = toInt(storeYear);
   const monthNum   = toInt(storeMonth);
   const quarterNum = toInt(storeQuarter);
@@ -138,17 +196,15 @@ const NetProfitAndSalesByClassification = () => {
   }, [level, monthNum, quarterNum]);
 
   const agreementId = useMemo(
-    () => normalizeSelections(agreement)[0],
+    () => normalizeSelections(agreement)[0] ?? undefined,
     [agreement],
   );
 
-  const enabled =
-    years.length > 0 && (level !== "month" || period !== undefined);
+  const enabled = years.length > 0 && (level === "year" || period !== undefined);
 
-  // ── query params ───────────────────────────────────────────────────────────
   const queryParams = useMemo(
     () => ({
-      groupLevel,   // number: 1 | 2 | 3  →  API param: group_level=1
+      groupLevel,
       level,
       years,
       period,
@@ -176,9 +232,7 @@ const NetProfitAndSalesByClassification = () => {
     },
   );
 
-  // ── process response ───────────────────────────────────────────────────────
-  // Real API fields confirmed: name | quantity_sold | sales | profit
-  const chartData = (data?.data ?? []) as CategoryRow[];
+  const chartData: CategoryRow[] = (data as SalesProfitByCategoryResponse | undefined)?.data ?? [];
 
   const { labels, quantities, revenues, profits } = useMemo(() => {
     const slice = chartData.slice(0, 10);
@@ -190,7 +244,7 @@ const NetProfitAndSalesByClassification = () => {
     };
   }, [chartData]);
 
-  // ── series ─────────────────────────────────────────────────────────────────
+  // ── series ────────────────────────────────────────────────────────────────
   const series = useMemo(
     () => [
       {
@@ -202,7 +256,7 @@ const NetProfitAndSalesByClassification = () => {
         barGap: "12%",
         itemStyle: {
           color: palette.primaryBlue,
-          borderRadius: [4, 4, 0, 0] as [number, number, number, number],
+          borderRadius: BAR_RADIUS,
         },
       },
       {
@@ -214,7 +268,7 @@ const NetProfitAndSalesByClassification = () => {
         barGap: "12%",
         itemStyle: {
           color: palette.primaryGreen,
-          borderRadius: [4, 4, 0, 0] as [number, number, number, number],
+          borderRadius: BAR_RADIUS,
         },
       },
       {
@@ -240,29 +294,30 @@ const NetProfitAndSalesByClassification = () => {
         data: labels,
         axisLabel: { rotate: 35, fontSize: 10 },
       },
-      yAxis,
+      yAxis: CHART_Y_AXIS,
       series,
-      legend,
-      grid,
+      legend: CHART_LEGEND,
+      grid: CHART_GRID,
     }),
     [labels, series],
   );
 
-  // ── states ─────────────────────────────────────────────────────────────────
-  const isLoadingOrFetching = isLoading || isFetching;
-  const isEmpty = !isLoadingOrFetching && !isError && chartData.length === 0;
+  // ── status helpers ────────────────────────────────────────────────────────
+  const isBusy  = isLoading || isFetching;
+  const isEmpty = !isBusy && !isError && chartData.length === 0;
+  const showChart = enabled && !isBusy && !isError && !isEmpty;
 
   const subtitle = !enabled
     ? "يرجى تحديد سنة صالحة من الفلتر"
-    : isLoadingOrFetching
-      ? "جاري تحميل البيانات..."
+    : isBusy
+      ? "جاري تحميل البيانات…"
       : isError
         ? "تعذر تحميل بيانات التصنيف"
         : isEmpty
           ? "لا توجد بيانات للفترة المحددة"
           : "مقارنة حسب التصنيف المختار";
 
-  // ── render ─────────────────────────────────────────────────────────────────
+  // ── render ────────────────────────────────────────────────────────────────
   return (
     <ChartCard
       title="صافي الأرباح والمبيعات حسب التصنيف"
@@ -270,62 +325,13 @@ const NetProfitAndSalesByClassification = () => {
       titleFlag="green"
       titleFlagNumber={2}
       headerExtra={
-        <div className="flex items-center gap-0.5 flex-wrap justify-end">
-          <span
-            className="text-[9px] shrink-0"
-            style={{ color: "var(--text-muted)" }}
-          >
-            التصنيف:
-          </span>
-
-          <div
-            className="flex items-center gap-0.5 flex-wrap"
-            role="radiogroup"
-            aria-label="التصنيف"
-          >
-            {classificationOptions.map((opt) => {
-              const isActive = groupLevel === opt.value;
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  role="radio"
-                  aria-checked={isActive}
-                  disabled={isLoadingOrFetching}
-                  onClick={() => setGroupLevel(opt.value)}
-                  className="px-2 py-1 rounded-md text-[10px] font-medium transition-all"
-                  style={{
-                    background: isActive
-                      ? "var(--accent-green-dim)"
-                      : "var(--bg-elevated)",
-                    color: isActive
-                      ? "var(--accent-green)"
-                      : "var(--text-muted)",
-                    border: `1px solid ${isActive ? "var(--accent-green)" : "var(--border-subtle)"}`,
-                    opacity: isLoadingOrFetching ? 0.55 : 1,
-                    cursor: isLoadingOrFetching ? "not-allowed" : "pointer",
-                    transition: "opacity 0.2s, background 0.15s",
-                  }}
-                >
-                  {opt.label}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Subtle inline fetch indicator */}
-          {isLoadingOrFetching && (
-            <span
-              className="text-[9px] animate-pulse"
-              style={{ color: "var(--accent-green)", marginInlineStart: 4 }}
-            >
-              ●●●
-            </span>
-          )}
-        </div>
+        <GroupSelector
+          value={groupLevel}
+          onChange={setGroupLevel}
+          disabled={isBusy}
+        />
       }
-      // Clear chart while loading / errored / empty — no stale data flash
-      option={isLoadingOrFetching || isError || isEmpty ? EMPTY_OPTION : option}
+      option={showChart ? option : EMPTY_OPTION}
       height="340px"
       delay={2}
     />

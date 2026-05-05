@@ -2,12 +2,16 @@ import axiosInstance from "@/api/axiosInstance";
 import type {
   DetailedSalesBreakdownParams,
   DetailedTimeSalesParams,
+  DetailedTimeSalesResponse,
   HierarchicalSalesParams,
+  HierarchicalSalesResponse,
   MonthlyProfitParams,
   NetSalesProfitChartParams,
   NetSalesProfitChartResponse,
   SalesAnalysisListResponse,
+  SalesBreakdownResponse,
   SalesProfitByCategoryParams,
+  SalesProfitByCategoryResponse,
   TransactionsWaterfallParams,
 } from "./types";
 
@@ -62,8 +66,8 @@ export const getNetSalesProfitChart = async (
 
 export const getSalesProfitByCategory = async (
   params: SalesProfitByCategoryParams,
-): Promise<SalesAnalysisListResponse> => {
-  const response = await axiosInstance.get<SalesAnalysisListResponse>(
+): Promise<SalesProfitByCategoryResponse> => {
+  const response = await axiosInstance.get<SalesProfitByCategoryResponse>(
     `${SALES_ANALYSES_BASE}/sales-profit-by-category/`,
     {
       params: withDefinedParams({
@@ -71,7 +75,6 @@ export const getSalesProfitByCategory = async (
         group_level: params.groupLevel,
         level: params.level,
         period: toCsv(params.period),
-        // Present in docs for one variant even when level is omitted.
         quarter: toCsv(params.quarter),
       }),
     },
@@ -82,25 +85,23 @@ export const getSalesProfitByCategory = async (
 
 export const getHierarchicalSales = async (
   params: HierarchicalSalesParams,
-): Promise<SalesAnalysisListResponse> => {
-  const response = await axiosInstance.get<SalesAnalysisListResponse>(
+): Promise<HierarchicalSalesResponse> => {
+  const response = await axiosInstance.get<HierarchicalSalesResponse>(
     `${SALES_ANALYSES_BASE}/hierarchical-sales/`,
-    {
-      params: withDefinedParams({
-        ...buildBaseFilterParams(params),
-        at: params.at,
-        level: params.level,
-        period: toCsv(params.period),
-        split_by_period:
-          params.splitByPeriod === undefined
-            ? undefined
-            : String(params.splitByPeriod),
-      }),
-    },
+    { params: withDefinedParams({
+      ...buildBaseFilterParams(params),
+      at: params.at,
+      level: params.level,
+      period: toCsv(params.period),
+      split_by_period:
+        params.splitByPeriod === undefined
+          ? undefined
+          : String(params.splitByPeriod),
+    }), },
   );
-
   return response.data;
 };
+
 
 export const getMonthlyProfit = async (
   params: MonthlyProfitParams,
@@ -121,30 +122,26 @@ export const getMonthlyProfit = async (
 
 export const getDetailedTimeSales = async (
   params: DetailedTimeSalesParams,
-): Promise<SalesAnalysisListResponse> => {
-  const response = await axiosInstance.get<SalesAnalysisListResponse>(
+): Promise<DetailedTimeSalesResponse> => {
+  const response = await axiosInstance.get<DetailedTimeSalesResponse>(
     `${SALES_ANALYSES_BASE}/detailed-time-sales/`,
-    {
-      params: buildBaseFilterParams(params),
-    },
+    { params: withDefinedParams({ ...buildBaseFilterParams(params) }) },
   );
-
   return response.data;
 };
 
 export const getDetailedSalesBreakdown = async (
   params: DetailedSalesBreakdownParams,
-): Promise<SalesAnalysisListResponse> => {
-  const response = await axiosInstance.get<SalesAnalysisListResponse>(
+): Promise<SalesBreakdownResponse> => {
+  const response = await axiosInstance.get<SalesBreakdownResponse>(
     `${SALES_ANALYSES_BASE}/detailed-sales-breakdown/`,
     {
       params: withDefinedParams({
-        ...buildBaseFilterParams(params),
         at: params.at,
+        ...buildBaseFilterParams(params),
       }),
     },
   );
-
   return response.data;
 };
 

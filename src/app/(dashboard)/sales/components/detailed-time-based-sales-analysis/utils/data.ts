@@ -1,5 +1,5 @@
 import { AnalyticsTableHeader } from "@/components/ui/AnalyticsTable";
-import type { DetailedTimeSalesItem, SalesAnalysisListResponse } from "@/api/sales-analyses/types";
+import type { DetailedTimeSalesItem, DetailedTimeSalesResponse, SalesAnalysisListResponse } from "@/api/sales-analyses/types";
 
 
 const MONTH_LABELS: Record<number, string> = {
@@ -22,20 +22,19 @@ function monthPositionInQuarter(month: number): number {
   return ((month - 1) % 3) + 1;
 }
 
+// change the parameter type and remove the cast on response.data
 export function transformDetailedTimeSales(
-  response: SalesAnalysisListResponse,
+  response: DetailedTimeSalesResponse,
 ): SalesAnalysisYear[] {
-  // Group flat rows by year → quarter → month
   const yearMap = new Map<number, Map<number, DetailedTimeSalesItem[]>>();
 
-  for (const item of response.data as DetailedTimeSalesItem[]) {
+  for (const item of response.data) {   // ← no cast, fully typed
     if (!yearMap.has(item.year)) yearMap.set(item.year, new Map());
     const quarterMap = yearMap.get(item.year)!;
     if (!quarterMap.has(item.quarter)) quarterMap.set(item.quarter, []);
     quarterMap.get(item.quarter)!.push(item);
   }
 
-  // Sort years descending (most recent first — matches mock order)
   const sortedYears = [...yearMap.keys()].sort((a, b) => b - a);
 
   return sortedYears.map((year) => {
@@ -47,28 +46,20 @@ export function transformDetailedTimeSales(
         .get(q)!
         .sort((a, b) => a.month - b.month)
         .map((item): SalesAnalysisMonth => ({
-          id: `m${item.month}`,
-          label: MONTH_LABELS[item.month] ?? String(item.month),
-          monthOrderLabel:
-            MONTH_ORDER_LABELS[monthPositionInQuarter(item.month)] ?? "",
-          net: item.net_sales,
-          netYoyPrior: item.net_sales_yoy ?? null,
-          mom: item.mom_growth_pct ?? null,
-          invoices: item.invoice_count,
-          margin: item.profit_margin_pct,
+          id:             `m${item.month}`,
+          label:          MONTH_LABELS[item.month] ?? String(item.month),
+          monthOrderLabel: MONTH_ORDER_LABELS[monthPositionInQuarter(item.month)] ?? "",
+          net:            item.net_sales,
+          netYoyPrior:    item.net_sales_yoy,
+          mom:            item.mom_growth_pct,
+          invoices:       item.invoice_count,
+          margin:         item.profit_margin_pct,
         }));
 
-      return {
-        id: `q${q}`,
-        label: QUARTER_LABELS[q] ?? `Q${q}`,
-        months,
-      };
+      return { id: `q${q}`, label: QUARTER_LABELS[q] ?? `Q${q}`, months };
     });
 
-    return {
-      year: String(year),
-      quarters,
-    };
+    return { year: String(year), quarters };
   });
 }
 
