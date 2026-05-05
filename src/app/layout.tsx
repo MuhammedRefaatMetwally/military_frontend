@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import QueryProvider from "@/components/providers/QueryProvider";
 
 export const metadata: Metadata = {
   title: "المؤسسة الاستهلاكية العسكرية",
@@ -23,7 +24,7 @@ export default function RootLayout({
         className="antialiased"
         style={{ fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif" }}
       >
-        {children}
+        <QueryProvider>{children}</QueryProvider>
       </body>
     </html>
   );

@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
-import { salesStats } from "./utils/salesStats";
+import type { SalesStatItem } from "./types";
 
-const SalesStatCard = ({ s, i }: { s: (typeof salesStats)[0]; i: number }) => {
+const SalesStatCard = ({ s, i }: { s: SalesStatItem; i: number }) => {
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}

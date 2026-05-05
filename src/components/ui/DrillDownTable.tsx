@@ -1,27 +1,22 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
-import { ChevronDown, ChevronLeft } from "lucide-react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
+import { ChevronDown, ChevronLeft, Loader2 } from "lucide-react";
 import AnalyticsTableCard from "@/components/ui/AnalyticsTableCard";
 import {
   AnalyticsBarCell,
   AnalyticsTable,
   analyticsTdBaseStyle,
 } from "@/components/ui/AnalyticsTable";
-
-// ── Deterministic seeded random ──
-let _s = 77;
-const sr = () => {
-  _s = (_s * 16807) % 2147483647;
-  return (_s & 0x7fffffff) / 2147483647;
-};
+import { SalesBreakdownRecord, useSalesBreakdownData } from "@/hooks/use-sales-breakdown-data";
 
 // ── Types ──
 interface RowData {
+  id: string; // Unique key for caching
   name: string;
   grossSales: number;
   netSales: number;
-  invoiceCount: number;
+  invoiceCount: number | null;
   discountValue: number;
   discountPct: number;
   returns: number;
@@ -31,210 +26,33 @@ interface RowData {
   soldMaterialsValue: number;
   avgPrice: number;
   avgDiscRate: number;
+  level: 'market' | 'group1' | 'group2' | 'group3' | 'product';
   children?: RowData[];
+  childrenLoaded?: boolean;
 }
 
-// ── Generate data ──
-const PRODUCTS = [
-  "أرز بسمتي ممتاز",
-  "أرز حبة متوسطة",
-  "زيت زيتون بكر",
-  "زيت عباد شمس",
-  "حليب طازج كامل",
-  "لبن زبادي",
-  "سكر أبيض 1كغ",
-  "شاي أسود سيلاني",
-  "معكرونة سباغيتي",
-  "تونة معلبة",
-  "فول مدمس",
-  "حمص بالطحينة",
-  "دجاج مجمد",
-  "صدور دجاج",
-  "لحمة مفرومة",
-  "خبز عربي",
-  "صابون غسيل",
-  "منظف أرضيات",
-  "شامبو ضد القشرة",
-  "حفاضات أطفال",
-  "مياه معدنية",
-  "عصير برتقال",
-  "مشروب غازي",
-  "بسكويت شوكولاتة",
-  "شيبس مملح",
-  "مكسرات مشكلة",
-  "بطاريات AA",
-  "مناديل ورقية",
-];
-
-const CATEGORIES = [
-  "منتجات غذائية",
-  "مستلزمات منزلية",
-  "العناية الشخصية",
-  "مشروبات",
-  "لحوم ودواجن",
-  "حلويات وسناكات",
-  "مستلزمات الأطفال",
-  "منتجات ورقية",
-];
-
-const BRANCHES = [
-  "سوق المنارة",
-  "سوق سلاح الجو",
-  "فرع عمّان الغربي",
-  "فرع إربد",
-  "فرع الزرقاء",
-];
-
-/** فرع واحد بإجمالي مرتجع منخفض (~٥–٨) للاختبار؛ يُوزَّع على صفوف المادة كوحدات ١ حتى تبقى المجاميع متسقة. */
-const LOW_RETURNS_TEST_BRANCH_IDX = 0;
-
-function mkRow(
-  name: string,
-  base: number,
-  branchIdx: number = 0,
-  lowReturnsBudget?: { n: number },
-): Omit<RowData, "children"> {
-  const gross = Math.round(base + sr() * base * 0.3);
-  const net = Math.round(gross * (0.95 + sr() * 0.04));
-  const tierBoost = [0, 0.012, 0.028, 0.05, 0.082][branchIdx % 5];
-  let returns: number;
-  if (lowReturnsBudget) {
-    if (lowReturnsBudget.n > 0) {
-      lowReturnsBudget.n -= 1;
-      returns = 1;
-    } else {
-      returns = 0;
-    }
-  } else {
-    returns = Math.round(
-      gross * Math.min(0.125, 0.002 + sr() * 0.035 + tierBoost),
-    );
-  }
-  const discountValue = Math.max(0, gross - net);
-  const discountPct =
-    gross > 0 ? Number(((discountValue / gross) * 100).toFixed(2)) : 0;
-  const soldMaterialsValue = Math.max(0, gross - returns);
-  const vol = Math.round(gross / (1.5 + sr() * 3));
-  const returnedItemCount =
-    returns <= 0
-      ? 0
-      : lowReturnsBudget !== undefined
-        ? 1
-        : Math.max(1, Math.min(vol, Math.round(1 + sr() * 5)));
-  const invoiceCount = Math.max(1, Math.round(vol * (0.15 + sr() * 1.2)));
-  const avgPrice = vol > 0 ? Number((gross / vol).toFixed(2)) : 0;
-  const avgDiscRate =
-    net > 0 ? Number(((discountValue / net) * 100).toFixed(2)) : 0;
+// ── Helper to convert API response to RowData ──
+function apiRecordToRowData(
+  record: SalesBreakdownRecord,
+  level: 'market' | 'group1' | 'group2' | 'group3' | 'product',
+): Omit<RowData, "children" | "childrenLoaded"> {
   return {
-    name,
-    grossSales: gross,
-    netSales: net,
-    invoiceCount,
-    discountValue,
-    discountPct,
-    returns,
-    returnedItemCount,
-    productVolume: vol,
-    itemCount: 1,
-    soldMaterialsValue,
-    avgPrice,
-    avgDiscRate,
+    id: record.id?.toString() || record.name,
+    name: record.name,
+    grossSales: record.total_sales,
+    netSales: record.net_sales,
+    invoiceCount: record.invoice_count, // null for drill-down levels
+    discountValue: record.discount_value,
+    discountPct: record.discount_pct,
+    returns: record.return_amount,
+    returnedItemCount: record.returned_qty,
+    productVolume: record.sold_qty,
+    itemCount: record.item_count,
+    soldMaterialsValue: record.sold_items_value,
+    avgPrice: record.avg_price,
+    avgDiscRate: record.return_ratio_pct,
+    level,
   };
-}
-
-/** Aggregate metrics from child rows (سوق → مجموعات → مادة). */
-function buildParent(name: string, children: RowData[]): RowData {
-  const grossSales = children.reduce((s, r) => s + r.grossSales, 0);
-  const netSales = children.reduce((s, r) => s + r.netSales, 0);
-  const discountValue = children.reduce((s, r) => s + r.discountValue, 0);
-  const returns = children.reduce((s, r) => s + r.returns, 0);
-  const returnedItemCount = children.reduce(
-    (s, r) => s + r.returnedItemCount,
-    0,
-  );
-  const invoiceCount = children.reduce((s, r) => s + r.invoiceCount, 0);
-  const productVolume = children.reduce((s, r) => s + r.productVolume, 0);
-  const itemCount = children.reduce((s, r) => s + r.itemCount, 0);
-  const soldMaterialsValue = children.reduce(
-    (s, r) => s + r.soldMaterialsValue,
-    0,
-  );
-  const discountPct =
-    grossSales > 0
-      ? Number(((discountValue / grossSales) * 100).toFixed(2))
-      : 0;
-  const avgPrice =
-    productVolume > 0 ? Number((grossSales / productVolume).toFixed(2)) : 0;
-  const avgDiscRate =
-    netSales > 0 ? Number(((discountValue / netSales) * 100).toFixed(2)) : 0;
-  return {
-    name,
-    grossSales,
-    netSales,
-    discountValue,
-    discountPct,
-    returns,
-    returnedItemCount,
-    invoiceCount,
-    productVolume,
-    itemCount,
-    soldMaterialsValue,
-    avgPrice,
-    avgDiscRate,
-    children,
-  };
-}
-
-_s = 77;
-/** التسلسل الهرمي: سوق → المجموعة الاولى → المجموعة الثانية → المجموعة الثالثة → المادة */
-const tableData: RowData[] = BRANCHES.map((branch, bi) => {
-  const lowReturnsBudget =
-    bi === LOW_RETURNS_TEST_BRANCH_IDX
-      ? { n: Math.round(5 + sr() * 3) }
-      : undefined;
-  const bBase = 40000 + sr() * 160000;
-  const g1List: RowData[] = [];
-  for (let g1 = 0; g1 < 2; g1++) {
-    const g1Base = (bBase / 2) * (0.45 + sr() * 0.15);
-    const g1Name = `المجموعة الاولى — ${CATEGORIES[(g1 * 3) % CATEGORIES.length]}`;
-    const g2List: RowData[] = [];
-    for (let g2 = 0; g2 < 2; g2++) {
-      const g2Base = (g1Base / 2) * (0.45 + sr() * 0.15);
-      const g2Name = `المجموعة الثانية — ${CATEGORIES[(g1 + g2 * 2) % CATEGORIES.length]}`;
-      const g3List: RowData[] = [];
-      for (let g3 = 0; g3 < 2; g3++) {
-        const g3Base = (g2Base / 2) * (0.45 + sr() * 0.15);
-        const g3Name = `المجموعة الثالثة — ${CATEGORIES[(g1 + g2 + g3) % CATEGORIES.length]}`;
-        const prods: RowData[] = [];
-        const pCount = 2 + Math.round(sr() * 3);
-        for (let p = 0; p < pCount; p++) {
-          prods.push(
-            mkRow(
-              PRODUCTS[Math.round(sr() * 1000) % PRODUCTS.length],
-              (g3Base / pCount) * (0.4 + sr() * 0.3),
-              bi,
-              lowReturnsBudget,
-            ),
-          );
-        }
-        g3List.push(buildParent(g3Name, prods));
-      }
-      g2List.push(buildParent(g2Name, g3List));
-    }
-    g1List.push(buildParent(g1Name, g2List));
-  }
-  return buildParent(branch, g1List);
-});
-
-/** Keys of this row and every nested row (same pattern as `root-0-1-…` in render). */
-function collectDescendantRowKeys(row: RowData, rowKey: string): string[] {
-  const keys: string[] = [];
-  if (!row.children?.length) return keys;
-  row.children.forEach((child, ci) => {
-    const childKey = `${rowKey}-${ci}`;
-    keys.push(childKey, ...collectDescendantRowKeys(child, childKey));
-  });
-  return keys;
 }
 
 // ── Columns definition ──
@@ -280,84 +98,143 @@ function returnsTextColor(grossSales: number, returns: number): string {
 }
 
 // ── Main Component ──
-export default function DrillDownTable() {
-  /** Only `true` means open; missing/`false` = closed (default closed for every row). */
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+interface DrillDownTableProps {
+  years?: string; // CSV: "2017,2018,2026"
+  branch?: string; // CSV: "51,52,53"
+  region?: string; // Single region ID
+}
 
-  const toggle = (rowKey: string, row: RowData) => {
+export default function DrillDownTable({ years = "2026", branch, region }: DrillDownTableProps) {
+  // State for drill-down and caching
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [rowCache, setRowCache] = useState<Map<string, RowData>>(new Map());
+
+  // Fetch market-level data
+  const { data: marketData, isLoading: marketLoading } = useSalesBreakdownData({
+    at: "market",
+    years,
+    region,
+  });
+
+  // Build initial rows from market data
+  const tableData = useMemo<RowData[]>(() => {
+    if (!marketData?.data) return [];
+    return marketData.data.map((record) => ({
+      ...apiRecordToRowData(record, "market"),
+      children: [],
+      childrenLoaded: false,
+    }));
+  }, [marketData?.data]);
+
+  // Lazy-load children on expand
+  const loadChildren = useCallback(
+    async (rowKey: string, row: RowData, parentBranchId: string) => {
+      if (row.childrenLoaded || !row.name) return;
+
+      const nextLevel = row.level === "market" ? "group1" : 
+                        row.level === "group1" ? "group2" : 
+                        row.level === "group2" ? "group3" : "product";
+
+      // Build filter params based on drill-down level
+      const filters: any = {
+        at: nextLevel,
+        years,
+      };
+
+      // Add accumulated branch filter
+      if (parentBranchId) filters.branch = parentBranchId;
+
+      // Fetch next level
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL || "https://military-project-6jpnk.ondigitalocean.app"}/api/datasorce/sales-analyses/detailed-sales-breakdown?` +
+        new URLSearchParams(filters).toString()
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        const children: RowData[] = data.data.map((record: SalesBreakdownRecord) => ({
+          ...apiRecordToRowData(record, nextLevel),
+          children: [],
+          childrenLoaded: false,
+        }));
+
+        // Update row in cache
+        const updatedRow: RowData = {
+          ...row,
+          children,
+          childrenLoaded: true,
+        };
+
+        setRowCache((prev) => {
+          const newCache = new Map(prev);
+          newCache.set(rowKey, updatedRow);
+          return newCache;
+        });
+      }
+    },
+    [years]
+  );
+
+  const toggle = (rowKey: string, row: RowData, parentBranchId?: string) => {
     setExpanded((prev) => {
       const isOpen = prev[rowKey] === true;
       if (isOpen) {
+        // Close and collapse children
         const next: Record<string, boolean> = { ...prev };
         next[rowKey] = false;
-        for (const d of collectDescendantRowKeys(row, rowKey)) {
-          delete next[d];
-        }
         return next;
+      } else {
+        // Open and load children if needed
+        if (!row.childrenLoaded && row.level !== "product") {
+          loadChildren(rowKey, row, parentBranchId || "");
+        }
+        return { ...prev, [rowKey]: true };
       }
-      return { ...prev, [rowKey]: true };
     });
   };
 
-  // Compute totals (جمع ثم إعادة حساب النِسَب والمتوسطات المركّبة)
+  // Compute totals from API response
   const totals = useMemo(() => {
-    const t: Record<string, number> = {};
-    COLUMNS.forEach((c) => {
-      t[c.key] = 0;
-    });
-    const sumKeys = [
-      "grossSales",
-      "netSales",
-      "invoiceCount",
-      "discountValue",
-      "returns",
-      "returnedItemCount",
-      "productVolume",
-      "itemCount",
-      "soldMaterialsValue",
-    ] as const;
-    tableData.forEach((b) => {
-      sumKeys.forEach((k) => {
-        t[k] += b[k];
-      });
-    });
-    t.discountPct =
-      t.grossSales > 0
-        ? Number(((t.discountValue / t.grossSales) * 100).toFixed(2))
-        : 0;
-    t.avgPrice =
-      t.productVolume > 0
-        ? Number((t.grossSales / t.productVolume).toFixed(2))
-        : 0;
-    t.avgDiscRate =
-      t.netSales > 0
-        ? Number(((t.discountValue / t.netSales) * 100).toFixed(2))
-        : 0;
-    return t;
-  }, []);
-
-  const maxGross = useMemo(
-    () => Math.max(...tableData.map((b) => b.grossSales)),
-    [],
-  );
-  const maxByKey = useMemo(() => {
-    const allRows: RowData[] = [];
-    const walk = (r: RowData) => {
-      allRows.push(r);
-      r.children?.forEach(walk);
+    if (!marketData?.totals) return {};
+    return {
+      grossSales: marketData.totals.total_sales,
+      netSales: marketData.totals.net_sales,
+      invoiceCount: marketData.totals.invoice_count,
+      discountValue: marketData.totals.discount_value,
+      discountPct: marketData.totals.discount_pct,
+      returns: marketData.totals.return_amount,
+      returnedItemCount: marketData.totals.returned_qty,
+      productVolume: marketData.totals.sold_qty,
+      itemCount: marketData.totals.item_count,
+      soldMaterialsValue: marketData.totals.sold_items_value,
+      avgPrice: marketData.totals.avg_price,
+      avgDiscRate: marketData.totals.return_ratio_pct,
     };
-    tableData.forEach(walk);
-    const m: Record<string, number> = {};
-    COLUMNS.forEach((c) => {
-      m[c.key] = Math.max(
-        1,
-        ...allRows.map((r) => (r as any)[c.key] as number),
-      );
-    });
-    return m;
-  }, []);
+  }, [marketData?.totals]);
 
-  const fmt = (v: number, key: string) => {
+  // Use API maxima for scaling
+  const maxByKey = useMemo(() => {
+    if (!marketData?.maxima) return {};
+    return {
+      grossSales: marketData.maxima.total_sales,
+      netSales: marketData.maxima.net_sales,
+      invoiceCount: 1,
+      discountValue: marketData.maxima.discount_value,
+      discountPct: 100,
+      returns: marketData.maxima.return_amount,
+      returnedItemCount: marketData.maxima.returned_qty,
+      productVolume: marketData.maxima.sold_qty,
+      itemCount: marketData.maxima.item_count,
+      soldMaterialsValue: marketData.maxima.sold_items_value,
+      avgPrice: marketData.maxima.total_sales / Math.max(1, marketData.maxima.sold_qty),
+      avgDiscRate: 100,
+    };
+  }, [marketData?.maxima]);
+
+  const maxGross = marketData?.maxima?.total_sales || 1;
+
+  const fmt = (v: number | null, key: string) => {
+    if (v === null) return "—";
     if (key === "avgPrice") return v.toFixed(2);
     if (key === "discountPct" || key === "avgDiscRate")
       return `${v.toFixed(2)}%`;
@@ -381,8 +258,9 @@ export default function DrillDownTable() {
     idx: number,
   ) => {
     const key = `${parentKey}-${idx}`;
-    const hasChildren = row.children && row.children.length > 0;
+    const hasChildren = !row.childrenLoaded ? level < 4 : (row.children && row.children.length > 0); // Can expand to next level
     const isOpen = expanded[key] === true;
+    const isLoadingChildren = expanded[key] === true && !row.childrenLoaded && hasChildren;
     const indent = level * 24;
 
     const levelColors = [
@@ -423,7 +301,7 @@ export default function DrillDownTable() {
           borderBottom: "1px solid var(--border-subtle)",
           background: rowBgByLevel[Math.min(level, rowBgByLevel.length - 1)],
         }}
-        onClick={() => hasChildren && toggle(key, row)}
+        onClick={() => hasChildren && toggle(key, row, branch)}
       >
         {/* Name column */}
         <td
@@ -448,7 +326,13 @@ export default function DrillDownTable() {
                   transition: "all 0.2s",
                 }}
               >
-                {isOpen ? (
+                {isLoadingChildren ? (
+                  <Loader2
+                    size={10}
+                    className="animate-spin"
+                    style={{ color: chevronIconOpen[chevronIdx] }}
+                  />
+                ) : isOpen ? (
                   <ChevronDown
                     size={11}
                     style={{ color: chevronIconOpen[chevronIdx] }}
@@ -474,7 +358,7 @@ export default function DrillDownTable() {
 
         {/* Data columns */}
         {COLUMNS.map((col) => {
-          const val = (row as any)[col.key] as number;
+          const val = (row as any)[col.key] as number | null;
           const isReturnsCol = col.key === "returns";
           const isDiscPct = col.key === "discountPct";
           const isAvgDisc = col.key === "avgDiscRate";
@@ -486,7 +370,7 @@ export default function DrillDownTable() {
                   style={{
                     fontSize: 10,
                     fontWeight: 600,
-                    color: returnsTextColor(row.grossSales, row.returns),
+                    color: val !== null ? returnsTextColor(row.grossSales, val) : "var(--text-muted)",
                   }}
                   dir="ltr"
                 >
@@ -516,8 +400,8 @@ export default function DrillDownTable() {
           return (
             <AnalyticsBarCell
               key={col.key}
-              value={val}
-              max={maxByKey[col.key] ?? maxGross}
+              value={val ?? 0}
+              max={(maxByKey as any)[col.key] ?? maxGross}
               color={isReturnsCol ? "#ef4444" : "#3b82f6"}
               text={fmt(val, col.key)}
             />
@@ -527,14 +411,29 @@ export default function DrillDownTable() {
     );
 
     // Render children
-    if (hasChildren && isOpen) {
-      row.children!.forEach((child, ci) => {
+    if (hasChildren && isOpen && row.children && row.children.length > 0) {
+      row.children.forEach((child, ci) => {
         rows.push(...renderRow(child, level + 1, key, ci));
       });
     }
 
     return rows;
   };
+
+  if (marketLoading) {
+    return (
+      <AnalyticsTableCard
+        title="تحليل المبيعات التفصيلي — سوق / مجموعات / مادة"
+        flag="green"
+        titleFlagNumber={5}
+      >
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="animate-spin mr-2" size={20} />
+          <span>جاري تحميل البيانات...</span>
+        </div>
+      </AnalyticsTableCard>
+    );
+  }
 
   return (
     <AnalyticsTableCard
@@ -612,9 +511,10 @@ export default function DrillDownTable() {
             </span>
           </td>
           {COLUMNS.map((col) => {
+            const totalVal = (totals as any)[col.key] as number | undefined;
             const totalColor =
               col.key === "returns"
-                ? returnsTextColor(totals.grossSales, totals.returns)
+                ? returnsTextColor(totals.grossSales || 0, totals.returns || 0)
                 : "var(--text-secondary)";
             return (
               <td key={col.key} style={analyticsTdBaseStyle("center")}>
@@ -622,7 +522,7 @@ export default function DrillDownTable() {
                   style={{ fontSize: 10, fontWeight: 700, color: totalColor }}
                   dir="ltr"
                 >
-                  {fmt((totals as any)[col.key] as number, col.key)}
+                  {fmt(totalVal ?? null, col.key)}
                 </span>
               </td>
             );
