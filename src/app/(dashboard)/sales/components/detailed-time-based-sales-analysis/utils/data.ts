@@ -1,0 +1,483 @@
+import { AnalyticsTableHeader } from "@/components/ui/AnalyticsTable";
+
+export type SalesAnalysisMonth = {
+  id: string;
+  label: string;
+  monthOrderLabel: string;
+  net: number;
+  netYoyPrior: number | null;
+  mom: number | null;
+  invoices: number;
+  margin: number;
+};
+
+export type SalesAnalysisQuarter = {
+  id: string;
+  label: string;
+  months: SalesAnalysisMonth[];
+};
+
+export type SalesAnalysisYear = {
+  year: string;
+  quarters: SalesAnalysisQuarter[];
+};
+
+export const headers: AnalyticsTableHeader[] = [
+  { label: "الفترة", align: "right", width: 190 },
+  { label: "صافي المبيعات", align: "center" },
+  { label: "صافي المبيعات YoY", align: "center" },
+  { label: "نمو YoY%", align: "center" },
+  { label: "نمو MoM%", align: "center" },
+  { label: "عدد الفواتير", align: "center" },
+  { label: "هامش الربح %", align: "center" },
+];
+
+export const salesAnalysisData: SalesAnalysisYear[] = [
+  {
+    year: "2022",
+    quarters: [
+      {
+        id: "q1",
+        label: "الربع الأول",
+        months: [
+          {
+            id: "jan",
+            label: "يناير",
+            monthOrderLabel: "الشهر الأول",
+            net: 1418,
+            netYoyPrior: 831,
+            mom: null,
+            invoices: 581,
+            margin: 59.84,
+          },
+          {
+            id: "feb",
+            label: "فبراير",
+            monthOrderLabel: "الشهر الثاني",
+            net: 1513,
+            netYoyPrior: 1665,
+            mom: 6.76,
+            invoices: 614,
+            margin: 60.93,
+          },
+          {
+            id: "mar",
+            label: "مارس",
+            monthOrderLabel: "الشهر الثالث",
+            net: 2065,
+            netYoyPrior: 1284,
+            mom: 36.48,
+            invoices: 823,
+            margin: 53.94,
+          },
+        ],
+      },
+      {
+        id: "q2",
+        label: "الربع الثاني",
+        months: [
+          {
+            id: "apr",
+            label: "أبريل",
+            monthOrderLabel: "الشهر الأول",
+            net: 1750,
+            netYoyPrior: 1400,
+            mom: -15.25,
+            invoices: 702,
+            margin: 55.42,
+          },
+          {
+            id: "may",
+            label: "مايو",
+            monthOrderLabel: "الشهر الثاني",
+            net: 1680,
+            netYoyPrior: 1320,
+            mom: -4.0,
+            invoices: 668,
+            margin: 56.1,
+          },
+          {
+            id: "jun",
+            label: "يونيو",
+            monthOrderLabel: "الشهر الثالث",
+            net: 1900,
+            netYoyPrior: 1550,
+            mom: 13.1,
+            invoices: 744,
+            margin: 54.76,
+          },
+        ],
+      },
+      {
+        id: "q3",
+        label: "الربع الثالث",
+        months: [
+          {
+            id: "jul",
+            label: "يوليو",
+            monthOrderLabel: "الشهر الأول",
+            net: 1995,
+            netYoyPrior: 1610,
+            mom: 5.0,
+            invoices: 781,
+            margin: 52.88,
+          },
+          {
+            id: "aug",
+            label: "أغسطس",
+            monthOrderLabel: "الشهر الثاني",
+            net: 1875,
+            netYoyPrior: 1495,
+            mom: -6.02,
+            invoices: 735,
+            margin: 53.44,
+          },
+          {
+            id: "sep",
+            label: "سبتمبر",
+            monthOrderLabel: "الشهر الثالث",
+            net: 2120,
+            netYoyPrior: 1710,
+            mom: 13.07,
+            invoices: 812,
+            margin: 51.93,
+          },
+        ],
+      },
+      {
+        id: "q4",
+        label: "الربع الرابع",
+        months: [
+          {
+            id: "oct",
+            label: "أكتوبر",
+            monthOrderLabel: "الشهر الأول",
+            net: 2260,
+            netYoyPrior: 1850,
+            mom: 6.6,
+            invoices: 855,
+            margin: 50.72,
+          },
+          {
+            id: "nov",
+            label: "نوفمبر",
+            monthOrderLabel: "الشهر الثاني",
+            net: 2410,
+            netYoyPrior: 1930,
+            mom: 6.64,
+            invoices: 902,
+            margin: 49.86,
+          },
+          {
+            id: "dec",
+            label: "ديسمبر",
+            monthOrderLabel: "الشهر الثالث",
+            net: 2685,
+            netYoyPrior: 2120,
+            mom: 11.41,
+            invoices: 988,
+            margin: 48.95,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    year: "2021",
+    quarters: [
+      {
+        id: "q1",
+        label: "الربع الأول",
+        months: [
+          {
+            id: "jan",
+            label: "يناير",
+            monthOrderLabel: "الشهر الأول",
+            net: 831,
+            netYoyPrior: 720,
+            mom: null,
+            invoices: 334,
+            margin: 31.07,
+          },
+          {
+            id: "feb",
+            label: "فبراير",
+            monthOrderLabel: "الشهر الثاني",
+            net: 1665,
+            netYoyPrior: 273,
+            mom: 100.36,
+            invoices: 515,
+            margin: 27.83,
+          },
+          {
+            id: "mar",
+            label: "مارس",
+            monthOrderLabel: "الشهر الثالث",
+            net: 1284,
+            netYoyPrior: 1821,
+            mom: -22.88,
+            invoices: 547,
+            margin: 26.04,
+          },
+        ],
+      },
+      {
+        id: "q2",
+        label: "الربع الثاني",
+        months: [
+          {
+            id: "apr",
+            label: "أبريل",
+            monthOrderLabel: "الشهر الأول",
+            net: 1400,
+            netYoyPrior: 940,
+            mom: 9.03,
+            invoices: 558,
+            margin: 28.12,
+          },
+          {
+            id: "may",
+            label: "مايو",
+            monthOrderLabel: "الشهر الثاني",
+            net: 1320,
+            netYoyPrior: 1050,
+            mom: -5.71,
+            invoices: 526,
+            margin: 29.34,
+          },
+          {
+            id: "jun",
+            label: "يونيو",
+            monthOrderLabel: "الشهر الثالث",
+            net: 1550,
+            netYoyPrior: 1180,
+            mom: 17.42,
+            invoices: 601,
+            margin: 30.18,
+          },
+        ],
+      },
+      {
+        id: "q3",
+        label: "الربع الثالث",
+        months: [
+          {
+            id: "jul",
+            label: "يوليو",
+            monthOrderLabel: "الشهر الأول",
+            net: 1610,
+            netYoyPrior: 1240,
+            mom: 3.87,
+            invoices: 622,
+            margin: 31.92,
+          },
+          {
+            id: "aug",
+            label: "أغسطس",
+            monthOrderLabel: "الشهر الثاني",
+            net: 1495,
+            netYoyPrior: 990,
+            mom: -7.14,
+            invoices: 576,
+            margin: 32.41,
+          },
+          {
+            id: "sep",
+            label: "سبتمبر",
+            monthOrderLabel: "الشهر الثالث",
+            net: 1710,
+            netYoyPrior: 1310,
+            mom: 14.38,
+            invoices: 648,
+            margin: 33.06,
+          },
+        ],
+      },
+      {
+        id: "q4",
+        label: "الربع الرابع",
+        months: [
+          {
+            id: "oct",
+            label: "أكتوبر",
+            monthOrderLabel: "الشهر الأول",
+            net: 1850,
+            netYoyPrior: 1450,
+            mom: 8.19,
+            invoices: 691,
+            margin: 34.1,
+          },
+          {
+            id: "nov",
+            label: "نوفمبر",
+            monthOrderLabel: "الشهر الثاني",
+            net: 1930,
+            netYoyPrior: 1580,
+            mom: 4.32,
+            invoices: 719,
+            margin: 35.2,
+          },
+          {
+            id: "dec",
+            label: "ديسمبر",
+            monthOrderLabel: "الشهر الثالث",
+            net: 2120,
+            netYoyPrior: 1720,
+            mom: 9.84,
+            invoices: 782,
+            margin: 36.05,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    year: "2020",
+    quarters: [
+      {
+        id: "q1",
+        label: "الربع الأول",
+        months: [
+          {
+            id: "jan",
+            label: "يناير",
+            monthOrderLabel: "الشهر الأول",
+            net: 720,
+            netYoyPrior: null,
+            mom: null,
+            invoices: 298,
+            margin: 1.18,
+          },
+          {
+            id: "feb",
+            label: "فبراير",
+            monthOrderLabel: "الشهر الثاني",
+            net: 273,
+            netYoyPrior: null,
+            mom: -62.08,
+            invoices: 113,
+            margin: 1.49,
+          },
+          {
+            id: "mar",
+            label: "مارس",
+            monthOrderLabel: "الشهر الثالث",
+            net: 1821,
+            netYoyPrior: null,
+            mom: 567.03,
+            invoices: 649,
+            margin: 2.24,
+          },
+        ],
+      },
+      {
+        id: "q2",
+        label: "الربع الثاني",
+        months: [
+          {
+            id: "apr",
+            label: "أبريل",
+            monthOrderLabel: "الشهر الأول",
+            net: 940,
+            netYoyPrior: null,
+            mom: -48.38,
+            invoices: 366,
+            margin: 3.42,
+          },
+          {
+            id: "may",
+            label: "مايو",
+            monthOrderLabel: "الشهر الثاني",
+            net: 1050,
+            netYoyPrior: null,
+            mom: 11.7,
+            invoices: 412,
+            margin: 4.15,
+          },
+          {
+            id: "jun",
+            label: "يونيو",
+            monthOrderLabel: "الشهر الثالث",
+            net: 1180,
+            netYoyPrior: null,
+            mom: 12.38,
+            invoices: 449,
+            margin: 5.08,
+          },
+        ],
+      },
+      {
+        id: "q3",
+        label: "الربع الثالث",
+        months: [
+          {
+            id: "jul",
+            label: "يوليو",
+            monthOrderLabel: "الشهر الأول",
+            net: 1240,
+            netYoyPrior: null,
+            mom: 5.08,
+            invoices: 475,
+            margin: 6.74,
+          },
+          {
+            id: "aug",
+            label: "أغسطس",
+            monthOrderLabel: "الشهر الثاني",
+            net: 990,
+            netYoyPrior: null,
+            mom: -20.16,
+            invoices: 384,
+            margin: 7.25,
+          },
+          {
+            id: "sep",
+            label: "سبتمبر",
+            monthOrderLabel: "الشهر الثالث",
+            net: 1310,
+            netYoyPrior: null,
+            mom: 32.32,
+            invoices: 501,
+            margin: 8.46,
+          },
+        ],
+      },
+      {
+        id: "q4",
+        label: "الربع الرابع",
+        months: [
+          {
+            id: "oct",
+            label: "أكتوبر",
+            monthOrderLabel: "الشهر الأول",
+            net: 1450,
+            netYoyPrior: null,
+            mom: 10.69,
+            invoices: 538,
+            margin: 9.1,
+          },
+          {
+            id: "nov",
+            label: "نوفمبر",
+            monthOrderLabel: "الشهر الثاني",
+            net: 1580,
+            netYoyPrior: null,
+            mom: 8.97,
+            invoices: 592,
+            margin: 10.42,
+          },
+          {
+            id: "dec",
+            label: "ديسمبر",
+            monthOrderLabel: "الشهر الثالث",
+            net: 1720,
+            netYoyPrior: null,
+            mom: 8.86,
+            invoices: 638,
+            margin: 11.36,
+          },
+        ],
+      },
+    ],
+  },
+];

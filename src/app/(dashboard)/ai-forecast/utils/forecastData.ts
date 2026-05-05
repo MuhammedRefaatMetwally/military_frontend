@@ -1,0 +1,15 @@
+export const forecastData = [
+  { date: "2022/03/19", actual: 1893.0, predicted: 1887.85 },
+  { date: "2022/03/20", actual: 2031.0, predicted: 2014.04 },
+  { date: "2022/03/21", actual: 2212.0, predicted: 2221.9 },
+  { date: "2022/03/22", actual: 1169.0, predicted: 1152.14 },
+  { date: "2022/03/23", actual: 2521.0, predicted: 2500.04 },
+  { date: "2022/03/24", actual: 7124.0, predicted: 7085.92 },
+  { date: "2022/03/25", actual: 3355.0, predicted: 3349.1 },
+  { date: "2022/03/26", actual: 5426.0, predicted: 5487.89 },
+  { date: "2022/03/27", actual: 7496.0, predicted: 7405.95 },
+  { date: "2022/03/28", actual: 4800.0, predicted: 4803.87 },
+  { date: "2022/03/29", actual: 6016.0, predicted: 6038.24 },
+  { date: "2022/03/30", actual: 4750.0, predicted: 4627.54 },
+  { date: "2022/03/31", actual: 9502.0, predicted: 9542.88 },
+];

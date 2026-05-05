@@ -1,0 +1,413 @@
+@import "tailwindcss";
+
+/* ═══════════════════════════════════════════════════════════════
+   المؤسسة الاستهلاكية العسكرية — نظام التصميم العام
+   المؤسسة الاستهلاكية العسكرية — نظام التصميم
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── الوضع المظلم (افتراضي) ── */
+:root,
+[data-theme="dark"] {
+  --bg-primary: #0a0e17;
+  --bg-secondary: #111827;
+  --bg-panel: #1a2035;
+  --bg-elevated: #1e2a3a;
+  --bg-hover: #243347;
+  --bg-input: #0f1729;
+
+  --border-subtle: #1e293b;
+  --border-default: #334155;
+  --border-strong: #475569;
+  --border-focus: #0d9f6e;
+
+  --text-primary: #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+
+  --accent-green: #00e5a0;
+  --accent-green-dim: rgba(0, 229, 160, 0.12);
+  --accent-cyan: #00d4ff;
+  --accent-cyan-dim: rgba(0, 212, 255, 0.12);
+  --accent-amber: #f59e0b;
+  --accent-red: #ef4444;
+  --accent-blue: #3b82f6;
+  --accent-purple: #a855f7;
+
+  --shadow-card:
+    0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
+  --shadow-elevated: 0 10px 25px -3px rgba(0, 0, 0, 0.4);
+
+  --panel-gradient: linear-gradient(
+    135deg,
+    rgba(26, 32, 53, 0.9) 0%,
+    rgba(17, 24, 39, 0.95) 100%
+  );
+  --panel-gradient-hover: linear-gradient(
+    135deg,
+    rgba(30, 42, 58, 0.9) 0%,
+    rgba(17, 24, 39, 0.95) 100%
+  );
+
+  --sidebar-bg: linear-gradient(180deg, #0d1321 0%, #0a0e17 100%);
+  --sidebar-text: #94a3b8;
+  --sidebar-text-active: #00e5a0;
+  --sidebar-active-bg: rgba(0, 229, 160, 0.08);
+  --sidebar-active-bar: #00e5a0;
+  --sidebar-hover-bg: rgba(255, 255, 255, 0.05);
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+  --sidebar-ai-text: #00d4ff;
+  --sidebar-ai-bg: rgba(0, 212, 255, 0.1);
+  --sidebar-ai-border: rgba(0, 212, 255, 0.2);
+  --sidebar-logo-gradient: linear-gradient(135deg, #047857 0%, #0891b2 100%);
+  --sidebar-logo-text: #00e5a0;
+  --sidebar-logo-sub: #64748b;
+  --sidebar-divider: rgba(255, 255, 255, 0.08);
+  --sidebar-toggle-text: #94a3b8;
+  --sidebar-toggle-border: rgba(255, 255, 255, 0.08);
+
+  --header-bg: rgba(10, 14, 23, 0.85);
+  --header-text: #e2e8f0;
+  --header-text-sub: #94a3b8;
+  --header-border: #1e293b;
+  --header-search-bg: rgba(15, 23, 41, 0.6);
+  --header-search-border: #1e293b;
+  --header-search-text: #94a3b8;
+  --header-badge-bg: rgba(0, 229, 160, 0.1);
+  --header-badge-text: #00e5a0;
+
+  --grid-line-color: rgba(0, 229, 160, 0.03);
+  --scan-line-color: rgba(255, 255, 255, 0.03);
+
+  --btn-primary-bg: linear-gradient(135deg, #0d9f6e 0%, #047857 100%);
+  --btn-primary-text: #ffffff;
+  --btn-primary-shadow: 0 0 15px rgba(13, 159, 110, 0.25);
+
+  /* Chart-specific */
+  --chart-label: #e2e8f0;
+  --chart-label-sub: #94a3b8;
+  --chart-line-muted: #334155;
+}
+
+/* ── الوضع الفاتح ── */
+[data-theme="light"] {
+  --bg-primary: #f0f4f8;
+  --bg-secondary: #ffffff;
+  --bg-panel: #ffffff;
+  --bg-elevated: #f8fafc;
+  --bg-hover: #eef2f6;
+  --bg-input: #f5f7fa;
+
+  --border-subtle: #e2e8f0;
+  --border-default: #cbd5e1;
+  --border-strong: #94a3b8;
+  --border-focus: #047857;
+
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+
+  --accent-green: #059669;
+  --accent-green-dim: rgba(5, 150, 105, 0.08);
+  --accent-cyan: #0891b2;
+  --accent-cyan-dim: rgba(8, 145, 178, 0.08);
+  --accent-amber: #d97706;
+  --accent-red: #dc2626;
+  --accent-blue: #2563eb;
+  --accent-purple: #7c3aed;
+
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-elevated: 0 4px 12px rgba(0, 0, 0, 0.06);
+
+  --panel-gradient: linear-gradient(135deg, #ffffff 0%, #fafbfc 100%);
+  --panel-gradient-hover: linear-gradient(135deg, #fafbfc 0%, #f5f7fa 100%);
+
+  --sidebar-bg: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  --sidebar-text: #64748b;
+  --sidebar-text-active: #059669;
+  --sidebar-active-bg: rgba(5, 150, 105, 0.07);
+  --sidebar-active-bar: #059669;
+  --sidebar-hover-bg: rgba(0, 0, 0, 0.03);
+  --sidebar-border: #e2e8f0;
+  --sidebar-ai-text: #0891b2;
+  --sidebar-ai-bg: rgba(8, 145, 178, 0.06);
+  --sidebar-ai-border: rgba(8, 145, 178, 0.15);
+  --sidebar-logo-gradient: linear-gradient(135deg, #059669 0%, #0891b2 100%);
+  --sidebar-logo-text: #059669;
+  --sidebar-logo-sub: #94a3b8;
+  --sidebar-divider: #e2e8f0;
+  --sidebar-toggle-text: #94a3b8;
+  --sidebar-toggle-border: #e2e8f0;
+
+  --header-bg: rgba(255, 255, 255, 0.92);
+  --header-text: #0f172a;
+  --header-text-sub: #64748b;
+  --header-border: #e2e8f0;
+  --header-search-bg: #f5f7fa;
+  --header-search-border: #e2e8f0;
+  --header-search-text: #94a3b8;
+  --header-badge-bg: rgba(5, 150, 105, 0.08);
+  --header-badge-text: #059669;
+
+  --grid-line-color: rgba(5, 150, 105, 0.04);
+  --scan-line-color: rgba(0, 0, 0, 0.02);
+
+  --btn-primary-bg: linear-gradient(135deg, #059669 0%, #047857 100%);
+  --btn-primary-text: #ffffff;
+  --btn-primary-shadow: 0 2px 8px rgba(5, 150, 105, 0.18);
+
+  /* Chart-specific */
+  --chart-label: #0f172a;
+  --chart-label-sub: #64748b;
+  --chart-line-muted: #e2e8f0;
+}
+
+@theme inline {
+  --color-background: var(--bg-primary);
+  --color-foreground: var(--text-primary);
+}
+
+/* ── إعادة تعيين ── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-default) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 3px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--border-strong);
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  overflow-x: hidden;
+  direction: rtl;
+}
+
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family:
+    "Noto Sans Arabic",
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  font-size: 14px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition:
+    background 0.3s ease,
+    color 0.3s ease;
+}
+
+/* ── لوحة زجاجية ── */
+.glass-panel {
+  background: var(--panel-gradient);
+  border: 1px solid var(--border-subtle);
+  backdrop-filter: blur(20px);
+  border-radius: 12px;
+  box-shadow: var(--shadow-card);
+  transition:
+    background 0.25s ease,
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+.glass-panel-hover:hover {
+  border-color: var(--border-default);
+  background: var(--panel-gradient-hover);
+}
+
+.glow-cyan {
+  box-shadow:
+    0 0 20px rgba(0, 212, 255, 0.15),
+    0 0 40px rgba(0, 212, 255, 0.06);
+}
+
+[data-theme="light"] .glow-cyan {
+  box-shadow: 0 0 8px rgba(8, 145, 178, 0.08);
+}
+
+/* ── حركة الوميض ── */
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-panel) 25%,
+    var(--bg-elevated) 50%,
+    var(--bg-panel) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: 6px;
+}
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* ── نبض التوهج ── */
+@keyframes pulse-glow {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.6;
+  }
+}
+
+/* ── خلفية الشبكة ── */
+@keyframes grid-scroll {
+  0% {
+    transform: translateY(0);
+  }
+
+  100% {
+    transform: translateY(40px);
+  }
+}
+
+.animated-grid {
+  background-image:
+    linear-gradient(var(--grid-line-color) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line-color) 1px, transparent 1px);
+  background-size: 40px 40px;
+  animation: grid-scroll 4s linear infinite;
+}
+
+/* ── شارات الحالة ── */
+.status-pending {
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--accent-amber);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.status-processing {
+  background: rgba(168, 85, 247, 0.12);
+  color: var(--accent-purple);
+  border: 1px solid rgba(168, 85, 247, 0.25);
+}
+
+.status-ready {
+  background: rgba(0, 229, 160, 0.12);
+  color: var(--accent-green);
+  border: 1px solid rgba(0, 229, 160, 0.25);
+}
+
+.status-failed {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--accent-red);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+[data-theme="light"] .status-pending {
+  background: rgba(217, 119, 6, 0.06);
+  color: #b45309;
+  border-color: rgba(217, 119, 6, 0.15);
+}
+
+[data-theme="light"] .status-processing {
+  background: rgba(124, 58, 237, 0.06);
+  color: #6d28d9;
+  border-color: rgba(124, 58, 237, 0.15);
+}
+
+[data-theme="light"] .status-ready {
+  background: rgba(5, 150, 105, 0.06);
+  color: #047857;
+  border-color: rgba(5, 150, 105, 0.15);
+}
+
+[data-theme="light"] .status-failed {
+  background: rgba(220, 38, 38, 0.06);
+  color: #dc2626;
+  border-color: rgba(220, 38, 38, 0.15);
+}
+
+/* ── تصميم وحدات AI ── */
+.ai-module {
+  position: relative;
+  overflow: hidden;
+}
+
+.ai-module::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--accent-cyan),
+    transparent
+  );
+  animation: pulse-glow 3s ease-in-out infinite;
+}
+
+/* ── شريط التقدم ── */
+.progress-bar {
+  height: 4px;
+  background: var(--bg-elevated);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.5s ease;
+}
+
+/* ── انتقالات ── */
+.sidebar-transition {
+  transition:
+    width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.content-transition {
+  transition: margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── تركيز ── */
+input:focus,
+select:focus,
+textarea:focus,
+button:focus-visible {
+  outline: 2px solid var(--accent-green);
+  outline-offset: 2px;
+}
+
+/* ── استجابة ── */
+@media (max-width: 768px) {
+  .content-transition {
+    margin-right: 0 !important;
+  }
+}
