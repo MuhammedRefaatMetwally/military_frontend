@@ -7,12 +7,12 @@ import { ChartTitleFlagBadge } from "@/components/ui/ChartTitleFlagBadge";
 import { useHierarchicalSales } from "@/hooks/useSalesAnalyses";
 import { useFilterStore } from "@/store/filterStore";
 import { TreeItem } from "./components/TreeItem";
-
+import AnalyticsLoader from "@/components/ui/analytics-loader";
 
 interface TreeNode {
   id: string;
   label: string;
-  value: number;  // sales
+  value: number; // sales
   profit: number;
 }
 
@@ -23,21 +23,25 @@ interface SelectedLevel {
   node: TreeNode;
 }
 
-
-const AT_LEVELS: AtLevel[] = ["branch", "group1", "group2", "group3", "product"];
+const AT_LEVELS: AtLevel[] = [
+  "branch",
+  "group1",
+  "group2",
+  "group3",
+  "product",
+];
 
 const HIERARCHY_TITLES: Record<AtLevel, string> = {
-  branch:  "الفرع",
-  group1:  "المجموعة الأولى",
-  group2:  "المجموعة الثانية",
-  group3:  "المجموعة الثالثة",
+  branch: "الفرع",
+  group1: "المجموعة الأولى",
+  group2: "المجموعة الثانية",
+  group3: "المجموعة الثالثة",
   product: "المنتج",
 };
 
 function secondarySalesMetric(node: TreeNode): number {
   return node.profit ?? 0;
 }
-
 
 const normalizeSelections = (values: string[]) =>
   values.filter((v) => v && v !== "all");
@@ -46,7 +50,6 @@ const toInt = (s: string): number | undefined => {
   const n = Number.parseInt(s, 10);
   return Number.isNaN(n) || s === "" ? undefined : n;
 };
-
 
 function ColumnSkeleton() {
   return (
@@ -104,13 +107,13 @@ function HierarchyColumn({
     at,
     level,
     years,
-    ...(period?.length         ? { period }      : {}),
-    ...(branchIds?.length      ? { branchIds }   : {}),
-    ...(regionIds?.length      ? { regionIds }   : {}),
-    ...(group1Ids?.length      ? { group1Ids }   : {}),
-    ...(group2Ids?.length      ? { group2Ids }   : {}),
-    ...(group3Ids?.length      ? { group3Ids }   : {}),
-    ...(agreementId            ? { agreementId } : {}),
+    ...(period?.length ? { period } : {}),
+    ...(branchIds?.length ? { branchIds } : {}),
+    ...(regionIds?.length ? { regionIds } : {}),
+    ...(group1Ids?.length ? { group1Ids } : {}),
+    ...(group2Ids?.length ? { group2Ids } : {}),
+    ...(group3Ids?.length ? { group3Ids } : {}),
+    ...(agreementId ? { agreementId } : {}),
     splitByPeriod: false,
   };
 
@@ -124,15 +127,17 @@ function HierarchyColumn({
   const nodes: TreeNode[] = React.useMemo(() => {
     if (!data?.data?.length) return [];
     return data.data.map((item) => ({
-      id:     String(item.id),
-      label:  item.name,
-      value:  item.sales,
+      id: String(item.id),
+      label: item.name,
+      value: item.sales,
       profit: item.profit,
     }));
   }, [data]);
 
-  const maxVal    = nodes.length ? Math.max(...nodes.map((n) => n.value))          : 1;
-  const maxSecVal = nodes.length ? Math.max(1, ...nodes.map(secondarySalesMetric)) : 1;
+  const maxVal = nodes.length ? Math.max(...nodes.map((n) => n.value)) : 1;
+  const maxSecVal = nodes.length
+    ? Math.max(1, ...nodes.map(secondarySalesMetric))
+    : 1;
 
   return (
     <motion.div
@@ -166,7 +171,9 @@ function HierarchyColumn({
         className="overflow-y-auto flex-1 min-h-0"
         style={{ maxHeight: "650px", paddingRight: "2px" }}
       >
-        {isFetching && <ColumnSkeleton />}
+        {isFetching && (
+          <AnalyticsLoader variant="compact" title="جاري التحميل" />
+        )}
 
         {!isFetching && isError && (
           <p
@@ -220,48 +227,52 @@ function HierarchyColumn({
 
 export default function SalesHierarchyAnalysis() {
   const {
-    year:            storeYear,
-    month:           storeMonth,
-    quarter:         storeQuarter,
+    year: storeYear,
+    month: storeMonth,
+    quarter: storeQuarter,
     activeBranches,
     region,
     productCategory,
     subcategory,
-    product:         storeProduct,
+    product: storeProduct,
     agreement,
   } = useFilterStore();
 
   // Standard level derivation
-  const yearNum    = toInt(storeYear);
-  const monthNum   = toInt(storeMonth);
+  const yearNum = toInt(storeYear);
+  const monthNum = toInt(storeMonth);
   const quarterNum = toInt(storeQuarter);
 
   const level: "year" | "quarter" | "month" =
-    monthNum   !== undefined ? "month"
-    : quarterNum !== undefined ? "quarter"
-    : "year";
+    monthNum !== undefined
+      ? "month"
+      : quarterNum !== undefined
+        ? "quarter"
+        : "year";
 
-  const years  = yearNum !== undefined ? [yearNum] : [];
+  const years = yearNum !== undefined ? [yearNum] : [];
   const period =
-    level === "month"   && monthNum   !== undefined ? [monthNum]   :
-    level === "quarter" && quarterNum !== undefined ? [quarterNum] :
-    undefined;
+    level === "month" && monthNum !== undefined
+      ? [monthNum]
+      : level === "quarter" && quarterNum !== undefined
+        ? [quarterNum]
+        : undefined;
 
   // Store-level filters — string[] throughout, matching HierarchicalSalesParams
-  const storeBranchIds   = normalizeSelections(activeBranches);
-  const storeRegionIds   = normalizeSelections(region);
+  const storeBranchIds = normalizeSelections(activeBranches);
+  const storeRegionIds = normalizeSelections(region);
   const storeAgreementId = normalizeSelections(agreement)[0];
-  const storeG1Ids       = normalizeSelections(productCategory);
-  const storeG2Ids       = normalizeSelections(subcategory);
-  const storeG3Ids       = normalizeSelections(storeProduct);
+  const storeG1Ids = normalizeSelections(productCategory);
+  const storeG2Ids = normalizeSelections(subcategory);
+  const storeG3Ids = normalizeSelections(storeProduct);
 
   // ── Drill-down path ────────────────────────────────────────────────────────
   const [path, setPath] = useState<SelectedLevel[]>([]);
 
   // Stable stringified deps to avoid infinite loops
-  const branchKey  = storeBranchIds.join(",");
-  const regionKey  = storeRegionIds.join(",");
-  const g1Key      = storeG1Ids.join(",");
+  const branchKey = storeBranchIds.join(",");
+  const regionKey = storeRegionIds.join(",");
+  const g1Key = storeG1Ids.join(",");
 
   useEffect(() => {
     setPath([]);
@@ -278,81 +289,84 @@ export default function SalesHierarchyAnalysis() {
     visibleColumns.push(AT_LEVELS[i + 1]);
   }
 
-
   const getColParams = (colIdx: number) => {
     const selBranchId = path[0]?.node.id;
-    const selG1Id     = path[1]?.node.id;
-    const selG2Id     = path[2]?.node.id;
-    const selG3Id     = path[3]?.node.id;
+    const selG1Id = path[1]?.node.id;
+    const selG2Id = path[2]?.node.id;
+    const selG3Id = path[3]?.node.id;
 
     if (colIdx === 0) {
       return {
-        branchIds:   storeBranchIds.length  ? storeBranchIds  : undefined,
-        regionIds:   storeRegionIds.length  ? storeRegionIds  : undefined,
-        group1Ids:   undefined as string[] | undefined,
-        group2Ids:   undefined as string[] | undefined,
-        group3Ids:   undefined as string[] | undefined,
+        branchIds: storeBranchIds.length ? storeBranchIds : undefined,
+        regionIds: storeRegionIds.length ? storeRegionIds : undefined,
+        group1Ids: undefined as string[] | undefined,
+        group2Ids: undefined as string[] | undefined,
+        group3Ids: undefined as string[] | undefined,
         agreementId: storeAgreementId,
       };
     }
-
 
     const effectiveBranchIds: string[] = selBranchId
       ? [selBranchId]
       : storeBranchIds;
 
-   
     if (colIdx === 1) {
       return {
-        branchIds:   effectiveBranchIds.length ? effectiveBranchIds : undefined,
-        regionIds:   storeRegionIds.length     ? storeRegionIds     : undefined,
-        group1Ids:   storeG1Ids.length         ? storeG1Ids         : undefined,
-        group2Ids:   undefined as string[] | undefined,
-        group3Ids:   undefined as string[] | undefined,
+        branchIds: effectiveBranchIds.length ? effectiveBranchIds : undefined,
+        regionIds: storeRegionIds.length ? storeRegionIds : undefined,
+        group1Ids: storeG1Ids.length ? storeG1Ids : undefined,
+        group2Ids: undefined as string[] | undefined,
+        group3Ids: undefined as string[] | undefined,
         agreementId: storeAgreementId,
       };
     }
 
     const effectiveG1Ids = selG1Id
       ? [selG1Id]
-      : storeG1Ids.length ? storeG1Ids : undefined;
+      : storeG1Ids.length
+        ? storeG1Ids
+        : undefined;
 
     if (colIdx === 2) {
       return {
-        branchIds:   effectiveBranchIds.length ? effectiveBranchIds : undefined,
-        regionIds:   storeRegionIds.length     ? storeRegionIds     : undefined,
-        group1Ids:   effectiveG1Ids,
-        group2Ids:   storeG2Ids.length         ? storeG2Ids         : undefined,
-        group3Ids:   undefined as string[] | undefined,
+        branchIds: effectiveBranchIds.length ? effectiveBranchIds : undefined,
+        regionIds: storeRegionIds.length ? storeRegionIds : undefined,
+        group1Ids: effectiveG1Ids,
+        group2Ids: storeG2Ids.length ? storeG2Ids : undefined,
+        group3Ids: undefined as string[] | undefined,
         agreementId: storeAgreementId,
       };
     }
 
     const effectiveG2Ids = selG2Id
       ? [selG2Id]
-      : storeG2Ids.length ? storeG2Ids : undefined;
+      : storeG2Ids.length
+        ? storeG2Ids
+        : undefined;
 
     if (colIdx === 3) {
       return {
-        branchIds:   effectiveBranchIds.length ? effectiveBranchIds : undefined,
-        regionIds:   storeRegionIds.length     ? storeRegionIds     : undefined,
-        group1Ids:   effectiveG1Ids,
-        group2Ids:   effectiveG2Ids,
-        group3Ids:   storeG3Ids.length         ? storeG3Ids         : undefined,
+        branchIds: effectiveBranchIds.length ? effectiveBranchIds : undefined,
+        regionIds: storeRegionIds.length ? storeRegionIds : undefined,
+        group1Ids: effectiveG1Ids,
+        group2Ids: effectiveG2Ids,
+        group3Ids: storeG3Ids.length ? storeG3Ids : undefined,
         agreementId: storeAgreementId,
       };
     }
 
     const effectiveG3Ids = selG3Id
       ? [selG3Id]
-      : storeG3Ids.length ? storeG3Ids : undefined;
+      : storeG3Ids.length
+        ? storeG3Ids
+        : undefined;
 
     return {
-      branchIds:   effectiveBranchIds.length ? effectiveBranchIds : undefined,
-      regionIds:   storeRegionIds.length     ? storeRegionIds     : undefined,
-      group1Ids:   effectiveG1Ids,
-      group2Ids:   effectiveG2Ids,
-      group3Ids:   effectiveG3Ids,
+      branchIds: effectiveBranchIds.length ? effectiveBranchIds : undefined,
+      regionIds: storeRegionIds.length ? storeRegionIds : undefined,
+      group1Ids: effectiveG1Ids,
+      group2Ids: effectiveG2Ids,
+      group3Ids: effectiveG3Ids,
       agreementId: storeAgreementId,
     };
   };
@@ -389,8 +403,8 @@ export default function SalesHierarchyAnalysis() {
           style={{ color: "var(--text-muted)" }}
         >
           اضغط على أي عنصر للتعمق • الشريط والرقم الأزرق: المبيعات • الأخضر:
-          الربح • الفرع ← المجموعة الأولى ← المجموعة الثانية ← المجموعة
-          الثالثة ← المنتج
+          الربح • الفرع ← المجموعة الأولى ← المجموعة الثانية ← المجموعة الثالثة
+          ← المنتج
         </p>
       </div>
 

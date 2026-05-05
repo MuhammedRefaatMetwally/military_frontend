@@ -2,17 +2,20 @@
 
 import { useResolvedAnalyticsPalette } from "@/hooks/useResolvedAnalyticsPalette";
 import { useSalesProfitByCategory } from "@/hooks/useSalesAnalyses";
-import type { CategoryRow, SalesProfitByCategoryResponse } from "@/api/sales-analyses";
+import type {
+  CategoryRow,
+  SalesProfitByCategoryResponse,
+} from "@/api/sales-analyses";
 import { useFilterStore } from "@/store/filterStore";
 import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
+import { AnalyticsLoader } from "@/components/ui/analytics-loader";
 
 const ChartCard = dynamic(
   () => import("@/components/ui/chart-card/ChartCard"),
   { ssr: false, loading: () => <Skeleton variant="chart" /> },
 );
-
 
 const normalizeSelections = (values: string[]) =>
   values.filter((v) => v && v !== "all");
@@ -21,7 +24,6 @@ const toInt = (s: string): number | undefined => {
   const n = Number.parseInt(s, 10);
   return Number.isNaN(n) || s === "" ? undefined : n;
 };
-
 
 const GROUP_OPTIONS = [
   { value: 1, label: "المجموعة الأولى" },
@@ -82,7 +84,6 @@ const CHART_Y_AXIS = [
 
 const BAR_RADIUS: [number, number, number, number] = [4, 4, 0, 0];
 
-
 interface GroupSelectorProps {
   value: GroupLevel;
   onChange: (v: GroupLevel) => void;
@@ -112,7 +113,9 @@ function GroupSelector({ value, onChange, disabled }: GroupSelectorProps) {
           } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
             e.preventDefault();
             onChange(
-              GROUP_OPTIONS[(idx - 1 + GROUP_OPTIONS.length) % GROUP_OPTIONS.length].value,
+              GROUP_OPTIONS[
+                (idx - 1 + GROUP_OPTIONS.length) % GROUP_OPTIONS.length
+              ].value,
             );
           }
         }}
@@ -159,27 +162,26 @@ function GroupSelector({ value, onChange, disabled }: GroupSelectorProps) {
   );
 }
 
-
 const NetProfitAndSalesByClassification = () => {
   const palette = useResolvedAnalyticsPalette();
   const [groupLevel, setGroupLevel] = useState<GroupLevel>(2);
 
-  const storeYear       = useFilterStore((s) => s.year);
-  const storeQuarter    = useFilterStore((s) => s.quarter);
-  const storeMonth      = useFilterStore((s) => s.month);
-  const region          = useFilterStore((s) => s.region);
-  const activeBranches  = useFilterStore((s) => s.activeBranches);
+  const storeYear = useFilterStore((s) => s.year);
+  const storeQuarter = useFilterStore((s) => s.quarter);
+  const storeMonth = useFilterStore((s) => s.month);
+  const region = useFilterStore((s) => s.region);
+  const activeBranches = useFilterStore((s) => s.activeBranches);
   const productCategory = useFilterStore((s) => s.productCategory);
-  const subcategory     = useFilterStore((s) => s.subcategory);
-  const product         = useFilterStore((s) => s.product);
-  const agreement       = useFilterStore((s) => s.agreement);
+  const subcategory = useFilterStore((s) => s.subcategory);
+  const product = useFilterStore((s) => s.product);
+  const agreement = useFilterStore((s) => s.agreement);
 
-  const yearNum    = toInt(storeYear);
-  const monthNum   = toInt(storeMonth);
+  const yearNum = toInt(storeYear);
+  const monthNum = toInt(storeMonth);
   const quarterNum = toInt(storeQuarter);
 
   const level = useMemo<"year" | "quarter" | "month">(() => {
-    if (monthNum   !== undefined) return "month";
+    if (monthNum !== undefined) return "month";
     if (quarterNum !== undefined) return "quarter";
     return "year";
   }, [monthNum, quarterNum]);
@@ -190,7 +192,7 @@ const NetProfitAndSalesByClassification = () => {
   );
 
   const period = useMemo<number[] | undefined>(() => {
-    if (level === "month"   && monthNum   !== undefined) return [monthNum];
+    if (level === "month" && monthNum !== undefined) return [monthNum];
     if (level === "quarter" && quarterNum !== undefined) return [quarterNum];
     return undefined;
   }, [level, monthNum, quarterNum]);
@@ -200,7 +202,8 @@ const NetProfitAndSalesByClassification = () => {
     [agreement],
   );
 
-  const enabled = years.length > 0 && (level === "year" || period !== undefined);
+  const enabled =
+    years.length > 0 && (level === "year" || period !== undefined);
 
   const queryParams = useMemo(
     () => ({
@@ -208,17 +211,24 @@ const NetProfitAndSalesByClassification = () => {
       level,
       years,
       period,
-      regionIds:  normalizeSelections(region),
-      branchIds:  normalizeSelections(activeBranches),
-      group1Ids:  normalizeSelections(productCategory),
-      group2Ids:  normalizeSelections(subcategory),
-      group3Ids:  normalizeSelections(product),
+      regionIds: normalizeSelections(region),
+      branchIds: normalizeSelections(activeBranches),
+      group1Ids: normalizeSelections(productCategory),
+      group2Ids: normalizeSelections(subcategory),
+      group3Ids: normalizeSelections(product),
       agreementId,
     }),
     [
-      groupLevel, level, years, period,
-      region, activeBranches, productCategory,
-      subcategory, product, agreementId,
+      groupLevel,
+      level,
+      years,
+      period,
+      region,
+      activeBranches,
+      productCategory,
+      subcategory,
+      product,
+      agreementId,
     ],
   );
 
@@ -232,15 +242,16 @@ const NetProfitAndSalesByClassification = () => {
     },
   );
 
-  const chartData: CategoryRow[] = (data as SalesProfitByCategoryResponse | undefined)?.data ?? [];
+  const chartData: CategoryRow[] =
+    (data as SalesProfitByCategoryResponse | undefined)?.data ?? [];
 
   const { labels, quantities, revenues, profits } = useMemo(() => {
     const slice = chartData.slice(0, 10);
     return {
-      labels:     slice.map((r) => r.name.split(" ").slice(0, 2).join(" ")),
+      labels: slice.map((r) => r.name.split(" ").slice(0, 2).join(" ")),
       quantities: slice.map((r) => r.quantity_sold),
-      revenues:   slice.map((r) => r.sales),
-      profits:    slice.map((r) => r.profit),
+      revenues: slice.map((r) => r.sales),
+      profits: slice.map((r) => r.profit),
     };
   }, [chartData]);
 
@@ -303,7 +314,7 @@ const NetProfitAndSalesByClassification = () => {
   );
 
   // ── status helpers ────────────────────────────────────────────────────────
-  const isBusy  = isLoading || isFetching;
+  const isBusy = isLoading || isFetching;
   const isEmpty = !isBusy && !isError && chartData.length === 0;
   const showChart = enabled && !isBusy && !isError && !isEmpty;
 
@@ -317,24 +328,41 @@ const NetProfitAndSalesByClassification = () => {
           ? "لا توجد بيانات للفترة المحددة"
           : "مقارنة حسب التصنيف المختار";
 
-  // ── render ────────────────────────────────────────────────────────────────
   return (
-    <ChartCard
-      title="صافي الأرباح والمبيعات حسب التصنيف"
-      subtitle={subtitle}
-      titleFlag="green"
-      titleFlagNumber={2}
-      headerExtra={
-        <GroupSelector
-          value={groupLevel}
-          onChange={setGroupLevel}
-          disabled={isBusy}
-        />
-      }
-      option={showChart ? option : EMPTY_OPTION}
-      height="340px"
-      delay={2}
-    />
+    <div className="relative">
+      {/* Loading Overlay */}
+      {isBusy && (
+        <div 
+          className="absolute inset-0 z-20 flex items-center justify-center rounded-xl"
+          style={{
+            background: "rgba(0, 0, 0, 0.4)",
+            backdropFilter: "blur(4px)",
+          }}
+        >
+          <AnalyticsLoader 
+            variant="compact" 
+            title="جاري تحميل البيانات" 
+          />
+        </div>
+      )}
+      
+      <ChartCard
+        title="صافي الأرباح والمبيعات حسب التصنيف"
+        subtitle={subtitle}
+        titleFlag="green"
+        titleFlagNumber={2}
+        headerExtra={
+          <GroupSelector
+            value={groupLevel}
+            onChange={setGroupLevel}
+            disabled={isBusy}
+          />
+        }
+        option={showChart ? option : EMPTY_OPTION}
+        height="340px"
+        delay={2}
+      />
+    </div>
   );
 };
 
