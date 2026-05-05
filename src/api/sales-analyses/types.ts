@@ -78,3 +78,126 @@ export interface SalesAnalysisRecord {
 }
 
 export type SalesAnalysisListResponse = SalesAnalysisRecord[];
+
+
+export interface CategoryRow {
+  id: number;
+  code: string;
+  name: string;
+  quantity_sold: number;
+  sales: number;
+  profit: number;
+}
+
+export interface SalesProfitByCategoryResponse {
+  group_level: GroupLevel;
+  years: number[];
+  data: CategoryRow[];
+}
+
+
+export interface HierarchicalSalesRow {
+  id: number;
+  code: string;
+  name: string;
+  sales: number;
+  profit: number;
+}
+
+export interface HierarchicalSalesResponse {
+  at: HierarchicalAt;
+  level: SalesAnalysisLevel;
+  split_by_period: boolean;
+  years: number[];
+  period: number[] | null;
+  quarters?: number[];
+  filters: {
+    branch: number[];
+    group1: number[];
+    group2: number[];
+    group3: number[];
+  };
+  data: HierarchicalSalesRow[];
+}
+
+
+export interface DetailedTimeSalesItem {
+  year: number;
+  quarter: number;
+  month: number;
+  net_sales: number;
+  net_sales_yoy: number;
+  yoy_growth_pct: number;
+  mom_growth_pct: number;
+  quarter_growth_pct: number;
+  invoice_count: number;
+  profit_margin_pct: number;
+}
+
+export interface DetailedTimeSalesResponse {
+  years: number[];
+  max_net_sales: number;
+  max_invoice_count: number;
+  data: DetailedTimeSalesItem[];
+}
+
+
+
+export interface SalesBreakdownFilters {
+  at: BreakdownAt;
+  years?: number[];
+  regionIds?: string[];
+  branchIds?: string[];
+  group1Ids?: string[];
+  group2Ids?: string[];
+  group3Ids?: string[];
+}
+
+export interface SalesBreakdownRecord {
+  id: number | null;
+  code: string | null;
+  name: string;
+  total_sales: number;
+  net_sales: number;
+  discount_value: number;
+  discount_pct: number;
+  avg_discount_pct: number;
+  return_amount: number;
+  returned_qty: number;
+  return_ratio_pct: number;
+  total_profit: number;
+  sold_qty: number;
+  sold_items_value: number;
+  item_count: number;
+  avg_price: number;
+  total_damaged_products: number;
+  invoice_count: number | null;
+}
+
+export interface SalesBreakdownMaxima {
+  total_sales: number;
+  net_sales: number;
+  discount_value: number;
+  return_amount: number;
+  returned_qty: number;
+  sold_qty: number;
+  sold_items_value: number;
+  item_count: number;
+  total_profit: number;
+  total_damaged_products: number;
+}
+
+export interface SalesBreakdownResponse {
+  at: BreakdownAt;
+  years: number[];
+  filters: {
+    branch?: number[];
+    group1?: number[];
+    group2?: number[];
+    group3?: number[];
+    region?: number[];
+  };
+  maxima: SalesBreakdownMaxima;
+  data: SalesBreakdownRecord[];
+  totals: SalesBreakdownRecord;
+}

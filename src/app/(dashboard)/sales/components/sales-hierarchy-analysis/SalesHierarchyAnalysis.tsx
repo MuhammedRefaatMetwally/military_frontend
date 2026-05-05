@@ -8,7 +8,6 @@ import { useHierarchicalSales } from "@/hooks/useSalesAnalyses";
 import { useFilterStore } from "@/store/filterStore";
 import { TreeItem } from "./components/TreeItem";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface TreeNode {
   id: string;
@@ -24,7 +23,6 @@ interface SelectedLevel {
   node: TreeNode;
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
 
 const AT_LEVELS: AtLevel[] = ["branch", "group1", "group2", "group3", "product"];
 
@@ -40,7 +38,6 @@ function secondarySalesMetric(node: TreeNode): number {
   return node.profit ?? 0;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const normalizeSelections = (values: string[]) =>
   values.filter((v) => v && v !== "all");
@@ -50,7 +47,6 @@ const toInt = (s: string): number | undefined => {
   return Number.isNaN(n) || s === "" ? undefined : n;
 };
 
-// ─── Skeleton ─────────────────────────────────────────────────────────────────
 
 function ColumnSkeleton() {
   return (
@@ -73,7 +69,6 @@ interface ColumnProps {
   years: number[];
   level: "year" | "quarter" | "month";
   period?: number[];
-  // All ID arrays match HierarchicalSalesParams exactly (string[], not csv)
   branchIds?: string[];
   regionIds?: string[];
   group1Ids?: string[];
@@ -105,8 +100,6 @@ function HierarchyColumn({
   const enabled =
     years.length > 0 && (level !== "month" || (period ?? []).length > 0);
 
-  // Build params matching HierarchicalSalesParams — arrays passed directly,
-  // the API client's buildBaseFilterParams handles toCsv internally.
   const params = {
     at,
     level,
@@ -130,14 +123,7 @@ function HierarchyColumn({
 
   const nodes: TreeNode[] = React.useMemo(() => {
     if (!data?.data?.length) return [];
-    return (
-      data.data as Array<{
-        id: number;
-        name: string;
-        sales: number;
-        profit: number;
-      }>
-    ).map((item) => ({
+    return data.data.map((item) => ({
       id:     String(item.id),
       label:  item.name,
       value:  item.sales,
@@ -292,22 +278,13 @@ export default function SalesHierarchyAnalysis() {
     visibleColumns.push(AT_LEVELS[i + 1]);
   }
 
-  // ── Per-column params ──────────────────────────────────────────────────────
-  //
-  //  colIdx 0 (branch):  no group filters — just show all branches
-  //  colIdx 1 (group1):  filter branch = selected branch from col 0
-  //  colIdx 2 (group2):  filter branch = selected branch, group1 = selected g1
-  //  colIdx 3 (group3):  + group2 = selected g2
-  //  colIdx 4 (product): + group3 = selected g3
-  //
+
   const getColParams = (colIdx: number) => {
     const selBranchId = path[0]?.node.id;
     const selG1Id     = path[1]?.node.id;
     const selG2Id     = path[2]?.node.id;
     const selG3Id     = path[3]?.node.id;
 
-    // Branch column: use only store branch/region — no group filters to avoid
-    // accidentally narrowing the branch list by group.
     if (colIdx === 0) {
       return {
         branchIds:   storeBranchIds.length  ? storeBranchIds  : undefined,
@@ -319,13 +296,12 @@ export default function SalesHierarchyAnalysis() {
       };
     }
 
-    // For all deeper columns, narrow by the selected branch (single item array)
-    // merged with any store-level branch filter.
+
     const effectiveBranchIds: string[] = selBranchId
       ? [selBranchId]
       : storeBranchIds;
 
-    // group1 column: just needs branch filter — no group1 param yet
+   
     if (colIdx === 1) {
       return {
         branchIds:   effectiveBranchIds.length ? effectiveBranchIds : undefined,
@@ -337,7 +313,6 @@ export default function SalesHierarchyAnalysis() {
       };
     }
 
-    // group2 column: filter by selected g1 (or store g1 fallback)
     const effectiveG1Ids = selG1Id
       ? [selG1Id]
       : storeG1Ids.length ? storeG1Ids : undefined;
@@ -353,7 +328,6 @@ export default function SalesHierarchyAnalysis() {
       };
     }
 
-    // group3 column: filter by selected g2 (or store g2 fallback)
     const effectiveG2Ids = selG2Id
       ? [selG2Id]
       : storeG2Ids.length ? storeG2Ids : undefined;
@@ -369,7 +343,6 @@ export default function SalesHierarchyAnalysis() {
       };
     }
 
-    // product column: filter by selected g3 (or store g3 fallback)
     const effectiveG3Ids = selG3Id
       ? [selG3Id]
       : storeG3Ids.length ? storeG3Ids : undefined;
@@ -421,7 +394,6 @@ export default function SalesHierarchyAnalysis() {
         </p>
       </div>
 
-      {/* Breadcrumbs */}
       <AnimatePresence>
         {path.length > 0 && (
           <motion.div

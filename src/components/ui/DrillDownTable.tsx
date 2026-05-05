@@ -1,18 +1,18 @@
 "use client";
 
-import React, { useState, useMemo, useCallback, useEffect } from "react";
-import { ChevronDown, ChevronLeft, Loader2 } from "lucide-react";
+import React, { useState, useMemo, useCallback } from "react";
+import { ChevronDown, ChevronLeft, Loader2, AlertCircle, RefreshCw, Inbox } from "lucide-react";
 import AnalyticsTableCard from "@/components/ui/AnalyticsTableCard";
 import {
   AnalyticsBarCell,
   AnalyticsTable,
   analyticsTdBaseStyle,
 } from "@/components/ui/AnalyticsTable";
-import { SalesBreakdownRecord, useSalesBreakdownData } from "@/hooks/use-sales-breakdown-data";
+import { getDetailedSalesBreakdown, SalesBreakdownRecord } from "@/api/sales-analyses";
+import { useDetailedSalesBreakdown } from "@/hooks/useSalesAnalyses";
 
-// ── Types ──
 interface RowData {
-  id: string; // Unique key for caching
+  id: string;
   name: string;
   grossSales: number;
   netSales: number;
@@ -26,66 +26,59 @@ interface RowData {
   soldMaterialsValue: number;
   avgPrice: number;
   avgDiscRate: number;
-  level: 'market' | 'group1' | 'group2' | 'group3' | 'product';
+  level: "market" | "group1" | "group2" | "group3" | "product";
   children?: RowData[];
   childrenLoaded?: boolean;
+  childrenError?: boolean;
 }
 
-// ── Helper to convert API response to RowData ──
+
 function apiRecordToRowData(
   record: SalesBreakdownRecord,
-  level: 'market' | 'group1' | 'group2' | 'group3' | 'product',
-): Omit<RowData, "children" | "childrenLoaded"> {
+  level: RowData["level"],
+): Omit<RowData, "children" | "childrenLoaded" | "childrenError"> {
   return {
-    id: record.id?.toString() || record.name,
-    name: record.name,
-    grossSales: record.total_sales,
-    netSales: record.net_sales,
-    invoiceCount: record.invoice_count, // null for drill-down levels
-    discountValue: record.discount_value,
-    discountPct: record.discount_pct,
-    returns: record.return_amount,
+    id:                record.id?.toString() || record.name,
+    name:              record.name,
+    grossSales:        record.total_sales,
+    netSales:          record.net_sales,
+    invoiceCount:      record.invoice_count,
+    discountValue:     record.discount_value,
+    discountPct:       record.discount_pct,
+    returns:           record.return_amount,
     returnedItemCount: record.returned_qty,
-    productVolume: record.sold_qty,
-    itemCount: record.item_count,
+    productVolume:     record.sold_qty,
+    itemCount:         record.item_count,
     soldMaterialsValue: record.sold_items_value,
-    avgPrice: record.avg_price,
-    avgDiscRate: record.return_ratio_pct,
+    avgPrice:          record.avg_price,
+    avgDiscRate:       record.return_ratio_pct,
     level,
   };
 }
 
-// ── Columns definition ──
-const COLUMNS = [
-  { key: "grossSales", label: "إجمالي المبيعات", labelEn: "Gross Sales" },
-  { key: "netSales", label: "صافي المبيعات", labelEn: "Net Sales" },
-  { key: "invoiceCount", label: "عدد الفواتير", labelEn: "Invoice count" },
-  { key: "discountValue", label: "قيمة الخصم", labelEn: "Discount Value" },
-  { key: "discountPct", label: "نسبة الخصم", labelEn: "Discount %" },
-  { key: "returns", label: "المرتجع", labelEn: "Returns" },
-  {
-    key: "returnedItemCount",
-    label: "عدد المواد المرتجعة",
-    labelEn: "Returned SKUs",
-  },
-  { key: "productVolume", label: "الكمية", labelEn: "Quantity" },
-  { key: "itemCount", label: "عدد المواد", labelEn: "SKU Count" },
-  {
-    key: "soldMaterialsValue",
-    label: "سعر المواد المباعة",
-    labelEn: "Sold Materials Value",
-  },
-  { key: "avgPrice", label: "متوسط السعر", labelEn: "Avg. Price" },
-  { key: "avgDiscRate", label: "متوسط نسبة الخصم", labelEn: "Avg. Discount %" },
-];
 
-/** شرائح لون عمود المرتجع: نسبة المرتجع على الإجمالي (مرتجع / إجمالي × 100). */
+const COLUMNS = [
+  { key: "grossSales",        label: "إجمالي المبيعات",       labelEn: "Gross Sales"         },
+  { key: "netSales",          label: "صافي المبيعات",          labelEn: "Net Sales"           },
+  { key: "invoiceCount",      label: "عدد الفواتير",           labelEn: "Invoice count"       },
+  { key: "discountValue",     label: "قيمة الخصم",             labelEn: "Discount Value"      },
+  { key: "discountPct",       label: "نسبة الخصم",             labelEn: "Discount %"          },
+  { key: "returns",           label: "المرتجع",                labelEn: "Returns"             },
+  { key: "returnedItemCount", label: "عدد المواد المرتجعة",    labelEn: "Returned SKUs"       },
+  { key: "productVolume",     label: "الكمية",                 labelEn: "Quantity"            },
+  { key: "itemCount",         label: "عدد المواد",             labelEn: "SKU Count"           },
+  { key: "soldMaterialsValue",label: "سعر المواد المباعة",     labelEn: "Sold Materials Value"},
+  { key: "avgPrice",          label: "متوسط السعر",            labelEn: "Avg. Price"          },
+  { key: "avgDiscRate",       label: "متوسط نسبة الخصم",       labelEn: "Avg. Discount %"     },
+] as const;
+
+
 const RETURNS_TIERS = [
-  { maxExclusive: 1, color: "#0a0a0a", labelAr: "أقل من ١٪" },
-  { maxExclusive: 3, color: "#ea580c", labelAr: "١٪ – أقل من ٣٪" },
-  { maxExclusive: 5, color: "#fb7185", labelAr: "٣٪ – أقل من ٥٪" },
-  { maxExclusive: 10, color: "#dc2626", labelAr: "٥٪ – أقل من ١٠٪" },
-  { maxExclusive: Infinity, color: "#7f1d1d", labelAr: "١٠٪ فأكثر" },
+  { maxExclusive: 1,        color: "#0a0a0a", labelAr: "أقل من ١٪"        },
+  { maxExclusive: 3,        color: "#ea580c", labelAr: "١٪ – أقل من ٣٪"  },
+  { maxExclusive: 5,        color: "#fb7185", labelAr: "٣٪ – أقل من ٥٪"  },
+  { maxExclusive: 10,       color: "#dc2626", labelAr: "٥٪ – أقل من ١٠٪" },
+  { maxExclusive: Infinity, color: "#7f1d1d", labelAr: "١٠٪ فأكثر"        },
 ] as const;
 
 function returnsTextColor(grossSales: number, returns: number): string {
@@ -97,280 +90,297 @@ function returnsTextColor(grossSales: number, returns: number): string {
   return RETURNS_TIERS[RETURNS_TIERS.length - 1].color;
 }
 
-// ── Main Component ──
-interface DrillDownTableProps {
-  years?: string; // CSV: "2017,2018,2026"
-  branch?: string; // CSV: "51,52,53"
-  region?: string; // Single region ID
+
+function SkeletonRows({ count = 6 }: { count?: number }) {
+  return (
+    <>
+      {Array.from({ length: count }).map((_, i) => (
+        <tr key={i} style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+          <td style={analyticsTdBaseStyle("right")}>
+            <div
+              className="animate-pulse rounded"
+              style={{
+                height: 12,
+                width: `${60 + (i % 3) * 15}%`,
+                background: "var(--bg-elevated)",
+                opacity: 1 - i * 0.1,
+              }}
+            />
+          </td>
+          {COLUMNS.map((col) => (
+            <td key={col.key} style={analyticsTdBaseStyle("center")}>
+              <div
+                className="animate-pulse rounded mx-auto"
+                style={{
+                  height: 10,
+                  width: "60%",
+                  background: "var(--bg-elevated)",
+                  opacity: 1 - i * 0.1,
+                }}
+              />
+            </td>
+          ))}
+        </tr>
+      ))}
+    </>
+  );
 }
 
-export default function DrillDownTable({ years = "2026", branch, region }: DrillDownTableProps) {
-  // State for drill-down and caching
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [rowCache, setRowCache] = useState<Map<string, RowData>>(new Map());
 
-  // Fetch market-level data
-  const { data: marketData, isLoading: marketLoading } = useSalesBreakdownData({
+function fmt(v: number | null, key: string): string {
+  if (v === null) return "—";
+  if (key === "avgPrice")                         return v.toFixed(2);
+  if (key === "discountPct" || key === "avgDiscRate") return `${v.toFixed(2)}%`;
+  if (key === "itemCount" || key === "invoiceCount" || key === "returnedItemCount")
+    return Math.round(v).toLocaleString("en-US");
+  if (key === "returns") return v.toFixed(2);
+  return v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+
+const LEVEL_TEXT_COLORS = [
+  "var(--text-primary)",   
+  "var(--accent-green)",   
+  "var(--accent-cyan)",    
+  "var(--accent-blue)",    
+  "var(--text-secondary)",
+];
+
+const CHEVRON_COLORS = [
+  "var(--accent-green)",
+  "var(--accent-green)",
+  "var(--accent-cyan)",
+  "var(--accent-blue)",
+];
+
+const ROW_BG_OPEN   = ["rgba(4,120,87,0.04)",  "rgba(8,145,178,0.04)", "rgba(8,145,178,0.02)", "rgba(8,145,178,0.02)", "transparent"];
+const ROW_BG_CLOSED = ["transparent",           "rgba(4,120,87,0.02)",  "rgba(8,145,178,0.02)", "rgba(8,145,178,0.02)", "transparent"];
+
+
+interface DrillDownTableProps {
+  years?: string;   
+  branch?: string;
+  region?: string;
+}
+
+export default function DrillDownTable({
+  years = "2026",
+  branch,
+  region,
+}: DrillDownTableProps) {
+  const [expanded,  setExpanded]  = useState<Record<string, boolean>>({});
+  const [rowCache,  setRowCache]  = useState<Map<string, RowData>>(new Map());
+  const [loadingKeys, setLoadingKeys] = useState<Set<string>>(new Set());
+  const [errorKeys,   setErrorKeys]   = useState<Set<string>>(new Set());
+
+  const { data: marketData, isLoading: marketLoading, isError: marketError, refetch: marketRefetch } =
+  useDetailedSalesBreakdown({
     at: "market",
-    years,
-    region,
+    years:     years ? years.split(",").map(Number) : undefined,
+branchIds: branch ? branch.split(",") : undefined,
+regionIds: region ? region.split(",") : undefined,
   });
 
-  // Build initial rows from market data
   const tableData = useMemo<RowData[]>(() => {
     if (!marketData?.data) return [];
-    return marketData.data.map((record) => ({
+    return marketData.data.map((record : SalesBreakdownRecord) => ({
       ...apiRecordToRowData(record, "market"),
-      children: [],
+      children:      [],
       childrenLoaded: false,
+      childrenError:  false,
     }));
   }, [marketData?.data]);
 
-  // Lazy-load children on expand
+  const isEmpty = !marketLoading && !marketError && tableData.length === 0;
+
   const loadChildren = useCallback(
     async (rowKey: string, row: RowData, parentBranchId: string) => {
-      if (row.childrenLoaded || !row.name) return;
+      if (row.childrenLoaded) return;
 
-      const nextLevel = row.level === "market" ? "group1" : 
-                        row.level === "group1" ? "group2" : 
-                        row.level === "group2" ? "group3" : "product";
+      const nextLevel =
+        row.level === "market" ? "group1" :
+        row.level === "group1" ? "group2" :
+        row.level === "group2" ? "group3" : "product";
 
-      // Build filter params based on drill-down level
-      const filters: any = {
-        at: nextLevel,
-        years,
-      };
+      setLoadingKeys((prev) => new Set(prev).add(rowKey));
+      setErrorKeys((prev) => { const s = new Set(prev); s.delete(rowKey); return s; });
 
-      // Add accumulated branch filter
-      if (parentBranchId) filters.branch = parentBranchId;
+      try {
+    
+        const json = await getDetailedSalesBreakdown({
+          at: nextLevel,
+          years: years ? years.split(",").map(Number) : undefined,
+          branchIds: parentBranchId ? [parentBranchId] : undefined,
+        });
 
-      // Fetch next level
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL || "https://military-project-6jpnk.ondigitalocean.app"}/api/datasorce/sales-analyses/detailed-sales-breakdown?` +
-        new URLSearchParams(filters).toString()
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        const children: RowData[] = data.data.map((record: SalesBreakdownRecord) => ({
-          ...apiRecordToRowData(record, nextLevel),
-          children: [],
+        const children: RowData[] = (json.data ?? []).map((record: SalesBreakdownRecord) => ({
+          ...apiRecordToRowData(record, nextLevel as RowData["level"]),
+          children:       [],
           childrenLoaded: false,
+          childrenError:  false,
         }));
 
-        // Update row in cache
-        const updatedRow: RowData = {
-          ...row,
-          children,
-          childrenLoaded: true,
-        };
-
         setRowCache((prev) => {
-          const newCache = new Map(prev);
-          newCache.set(rowKey, updatedRow);
-          return newCache;
+          const next = new Map(prev);
+          next.set(rowKey, { ...row, children, childrenLoaded: true, childrenError: false });
+          return next;
         });
+      } catch {
+        setRowCache((prev) => {
+          const next = new Map(prev);
+          next.set(rowKey, { ...row, children: [], childrenLoaded: false, childrenError: true });
+          return next;
+        });
+        setErrorKeys((prev) => new Set(prev).add(rowKey));
+      } finally {
+        setLoadingKeys((prev) => { const s = new Set(prev); s.delete(rowKey); return s; });
       }
     },
-    [years]
+    [years],
   );
 
-  const toggle = (rowKey: string, row: RowData, parentBranchId?: string) => {
-    setExpanded((prev) => {
-      const isOpen = prev[rowKey] === true;
-      if (isOpen) {
-        // Close and collapse children
-        const next: Record<string, boolean> = { ...prev };
-        next[rowKey] = false;
-        return next;
-      } else {
-        // Open and load children if needed
+  const toggle = useCallback(
+    (rowKey: string, row: RowData, parentBranchId?: string) => {
+      setExpanded((prev) => {
+        const isOpen = prev[rowKey] === true;
+        if (isOpen) {
+          return { ...prev, [rowKey]: false };
+        }
         if (!row.childrenLoaded && row.level !== "product") {
-          loadChildren(rowKey, row, parentBranchId || "");
+          loadChildren(rowKey, row, parentBranchId ?? "");
         }
         return { ...prev, [rowKey]: true };
-      }
-    });
-  };
+      });
+    },
+    [loadChildren],
+  );
 
-  // Compute totals from API response
+  const retryChildren = useCallback(
+    (rowKey: string, row: RowData, parentBranchId?: string) => {
+      setErrorKeys((prev) => { const s = new Set(prev); s.delete(rowKey); return s; });
+      loadChildren(rowKey, row, parentBranchId ?? "");
+    },
+    [loadChildren],
+  );
+
   const totals = useMemo(() => {
-    if (!marketData?.totals) return {};
+    if (!marketData?.totals) return {} as Record<string, number>;
+    const t = marketData.totals;
     return {
-      grossSales: marketData.totals.total_sales,
-      netSales: marketData.totals.net_sales,
-      invoiceCount: marketData.totals.invoice_count,
-      discountValue: marketData.totals.discount_value,
-      discountPct: marketData.totals.discount_pct,
-      returns: marketData.totals.return_amount,
-      returnedItemCount: marketData.totals.returned_qty,
-      productVolume: marketData.totals.sold_qty,
-      itemCount: marketData.totals.item_count,
-      soldMaterialsValue: marketData.totals.sold_items_value,
-      avgPrice: marketData.totals.avg_price,
-      avgDiscRate: marketData.totals.return_ratio_pct,
+      grossSales:         t.total_sales,
+      netSales:           t.net_sales,
+      invoiceCount:       t.invoice_count,
+      discountValue:      t.discount_value,
+      discountPct:        t.discount_pct,
+      returns:            t.return_amount,
+      returnedItemCount:  t.returned_qty,
+      productVolume:      t.sold_qty,
+      itemCount:          t.item_count,
+      soldMaterialsValue: t.sold_items_value,
+      avgPrice:           t.avg_price,
+      avgDiscRate:        t.return_ratio_pct,
     };
   }, [marketData?.totals]);
 
-  // Use API maxima for scaling
   const maxByKey = useMemo(() => {
-    if (!marketData?.maxima) return {};
+    if (!marketData?.maxima) return {} as Record<string, number>;
+    const m = marketData.maxima;
     return {
-      grossSales: marketData.maxima.total_sales,
-      netSales: marketData.maxima.net_sales,
-      invoiceCount: 1,
-      discountValue: marketData.maxima.discount_value,
-      discountPct: 100,
-      returns: marketData.maxima.return_amount,
-      returnedItemCount: marketData.maxima.returned_qty,
-      productVolume: marketData.maxima.sold_qty,
-      itemCount: marketData.maxima.item_count,
-      soldMaterialsValue: marketData.maxima.sold_items_value,
-      avgPrice: marketData.maxima.total_sales / Math.max(1, marketData.maxima.sold_qty),
-      avgDiscRate: 100,
+      grossSales:         m.total_sales,
+      netSales:           m.net_sales,
+      invoiceCount:       1,
+      discountValue:      m.discount_value,
+      discountPct:        100,
+      returns:            m.return_amount,
+      returnedItemCount:  m.returned_qty,
+      productVolume:      m.sold_qty,
+      itemCount:          m.item_count,
+      soldMaterialsValue: m.sold_items_value,
+      avgPrice:           m.total_sales / Math.max(1, m.sold_qty),
+      avgDiscRate:        100,
     };
   }, [marketData?.maxima]);
 
-  const maxGross = marketData?.maxima?.total_sales || 1;
-
-  const fmt = (v: number | null, key: string) => {
-    if (v === null) return "—";
-    if (key === "avgPrice") return v.toFixed(2);
-    if (key === "discountPct" || key === "avgDiscRate")
-      return `${v.toFixed(2)}%`;
-    if (
-      key === "itemCount" ||
-      key === "invoiceCount" ||
-      key === "returnedItemCount"
-    )
-      return Math.round(v).toLocaleString("en-US");
-    if (key === "returns") return v.toFixed(2);
-    return v.toLocaleString("en-US", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
-  };
+  const maxGross = marketData?.maxima?.total_sales ?? 1;
 
   const renderRow = (
     row: RowData,
     level: number,
     parentKey: string,
     idx: number,
-  ) => {
-    const key = `${parentKey}-${idx}`;
-    const hasChildren = !row.childrenLoaded ? level < 4 : (row.children && row.children.length > 0); // Can expand to next level
-    const isOpen = expanded[key] === true;
-    const isLoadingChildren = expanded[key] === true && !row.childrenLoaded && hasChildren;
-    const indent = level * 24;
+  ): React.ReactNode[] => {
+    const key        = `${parentKey}-${idx}`;
+    const cachedRow  = rowCache.get(key) ?? row;
+    const isOpen     = expanded[key] === true;
+    const isChildLoading = loadingKeys.has(key);
+    const isChildError   = errorKeys.has(key);
+    const canExpand  = level < 4;
+    const indent     = level * 24;
 
-    const levelColors = [
-      "var(--text-primary)", // سوق
-      "var(--accent-green)", // المجموعة الاولى
-      "var(--accent-cyan)", // المجموعة الثانية
-      "var(--accent-blue)", // المجموعة الثالثة
-      "var(--text-secondary)", // المادة
-    ];
-    const chevronIconOpen = [
-      "var(--accent-green)",
-      "var(--accent-green)",
-      "var(--accent-cyan)",
-      "var(--accent-blue)",
-    ];
-    const colorIdx = Math.min(level, levelColors.length - 1);
-    const chevronIdx = Math.min(level, chevronIconOpen.length - 1);
+    const colorIdx   = Math.min(level, LEVEL_TEXT_COLORS.length - 1);
+    const chevronIdx = Math.min(level, CHEVRON_COLORS.length - 1);
+    const rowBg      = (isOpen ? ROW_BG_OPEN : ROW_BG_CLOSED)[Math.min(level, 4)];
 
-    const rowBgByLevel = [
-      isOpen ? "rgba(4,120,87,0.04)" : "transparent",
-      isOpen ? "rgba(8,145,178,0.04)" : "rgba(4,120,87,0.02)",
-      "rgba(8,145,178,0.02)",
-      "rgba(8,145,178,0.02)",
-      "transparent",
-    ];
+    const nodes: React.ReactNode[] = [];
 
-    const rows: React.ReactNode[] = [];
-
-    rows.push(
+    nodes.push(
       <tr
         key={key}
-        className={
-          hasChildren
-            ? "cursor-pointer hover:bg-white/1.5 transition-colors"
-            : undefined
-        }
+        className={canExpand ? "cursor-pointer hover:bg-white/[0.015] transition-colors" : undefined}
         style={{
           borderBottom: "1px solid var(--border-subtle)",
-          background: rowBgByLevel[Math.min(level, rowBgByLevel.length - 1)],
+          background: rowBg,
         }}
-        onClick={() => hasChildren && toggle(key, row, branch)}
+        onClick={() => canExpand && toggle(key, cachedRow, branch)}
       >
-        {/* Name column */}
-        <td
-          style={{
-            ...analyticsTdBaseStyle("right"),
-            paddingRight: `${indent + 12}px`,
-          }}
-        >
+        {/* Name cell */}
+        <td style={{ ...analyticsTdBaseStyle("right"), paddingRight: `${indent + 12}px` }}>
           <div className="flex items-center gap-1.5">
-            {hasChildren ? (
+            {canExpand ? (
               <span
                 style={{
-                  display: "inline-flex",
-                  alignItems: "center",
+                  display:        "inline-flex",
+                  alignItems:     "center",
                   justifyContent: "center",
-                  width: "16px",
-                  height: "16px",
-                  borderRadius: "4px",
-                  background: isOpen
-                    ? "rgba(0,229,160,0.11)"
-                    : "var(--bg-elevated)",
-                  transition: "all 0.2s",
+                  width:          16,
+                  height:         16,
+                  borderRadius:   4,
+                  background:     isOpen ? "rgba(0,229,160,0.11)" : "var(--bg-elevated)",
+                  transition:     "all 0.2s",
+                  flexShrink:     0,
                 }}
               >
-                {isLoadingChildren ? (
-                  <Loader2
-                    size={10}
-                    className="animate-spin"
-                    style={{ color: chevronIconOpen[chevronIdx] }}
-                  />
+                {isChildLoading ? (
+                  <Loader2 size={10} className="animate-spin" style={{ color: CHEVRON_COLORS[chevronIdx] }} />
                 ) : isOpen ? (
-                  <ChevronDown
-                    size={11}
-                    style={{ color: chevronIconOpen[chevronIdx] }}
-                  />
+                  <ChevronDown size={11} style={{ color: CHEVRON_COLORS[chevronIdx] }} />
                 ) : (
-                  <ChevronLeft
-                    size={11}
-                    style={{ color: "var(--text-muted)" }}
-                  />
+                  <ChevronLeft size={11} style={{ color: "var(--text-muted)" }} />
                 )}
               </span>
             ) : (
-              <span style={{ width: "16px", display: "inline-block" }} />
+              <span style={{ width: 16, flexShrink: 0, display: "inline-block" }} />
             )}
-            <span
-              className="text-xs font-medium"
-              style={{ color: levelColors[colorIdx] }}
-            >
+            <span className="text-xs font-medium" style={{ color: LEVEL_TEXT_COLORS[colorIdx] }}>
               {row.name}
             </span>
           </div>
         </td>
 
-        {/* Data columns */}
+        {/* Data cells */}
         {COLUMNS.map((col) => {
-          const val = (row as any)[col.key] as number | null;
-          const isReturnsCol = col.key === "returns";
-          const isDiscPct = col.key === "discountPct";
-          const isAvgDisc = col.key === "avgDiscRate";
+          const val        = (cachedRow as any)[col.key] as number | null;
+          const isReturns  = col.key === "returns";
+          const isPctOnly  = col.key === "discountPct" || col.key === "avgDiscRate";
 
-          if (isReturnsCol) {
+          if (isReturns) {
             return (
               <td key={col.key} style={analyticsTdBaseStyle("center")}>
                 <span
                   style={{
-                    fontSize: 10,
+                    fontSize:   10,
                     fontWeight: 600,
-                    color: val !== null ? returnsTextColor(row.grossSales, val) : "var(--text-muted)",
+                    color: val !== null ? returnsTextColor(cachedRow.grossSales, val) : "var(--text-muted)",
                   }}
                   dir="ltr"
                 >
@@ -380,17 +390,10 @@ export default function DrillDownTable({ years = "2026", branch, region }: Drill
             );
           }
 
-          if (isDiscPct || isAvgDisc) {
+          if (isPctOnly) {
             return (
               <td key={col.key} style={analyticsTdBaseStyle("center")}>
-                <span
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 600,
-                    color: "var(--text-secondary)",
-                  }}
-                  dir="ltr"
-                >
+                <span style={{ fontSize: 10, fontWeight: 600, color: "var(--text-secondary)" }} dir="ltr">
                   {fmt(val, col.key)}
                 </span>
               </td>
@@ -402,7 +405,7 @@ export default function DrillDownTable({ years = "2026", branch, region }: Drill
               key={col.key}
               value={val ?? 0}
               max={(maxByKey as any)[col.key] ?? maxGross}
-              color={isReturnsCol ? "#ef4444" : "#3b82f6"}
+              color="#3b82f6"
               text={fmt(val, col.key)}
             />
           );
@@ -410,68 +413,90 @@ export default function DrillDownTable({ years = "2026", branch, region }: Drill
       </tr>,
     );
 
-    // Render children
-    if (hasChildren && isOpen && row.children && row.children.length > 0) {
-      row.children.forEach((child, ci) => {
-        rows.push(...renderRow(child, level + 1, key, ci));
+    // Children error row — inline retry inside the table
+    if (isOpen && isChildError && !isChildLoading) {
+      nodes.push(
+        <tr key={`${key}-error`} style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+          <td
+            colSpan={COLUMNS.length + 1}
+            style={{ padding: "8px 16px", paddingRight: `${indent + 36}px` }}
+          >
+            <div className="flex items-center gap-2">
+              <AlertCircle size={12} style={{ color: "var(--accent-red)", flexShrink: 0 }} />
+              <span style={{ fontSize: 11, color: "var(--text-muted)" }}>تعذر تحميل البيانات</span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  retryChildren(key, cachedRow, branch);
+                }}
+                className="flex items-center gap-1 px-2 py-0.5 rounded transition-opacity hover:opacity-80"
+                style={{
+                  fontSize:   10,
+                  background: "var(--bg-elevated)",
+                  border:     "1px solid var(--border-subtle)",
+                  color:      "var(--text-secondary)",
+                  cursor:     "pointer",
+                }}
+              >
+                <RefreshCw size={9} />
+                إعادة المحاولة
+              </button>
+            </div>
+          </td>
+        </tr>,
+      );
+    }
+
+    // Children skeleton rows while loading
+    if (isOpen && isChildLoading) {
+      nodes.push(
+        <tr key={`${key}-skeleton`} style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+          <td colSpan={COLUMNS.length + 1} style={{ padding: "4px 0" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <tbody>
+                <SkeletonRows count={3} />
+              </tbody>
+            </table>
+          </td>
+        </tr>,
+      );
+    }
+
+    // Render loaded children
+    if (isOpen && !isChildLoading && !isChildError && cachedRow.children?.length) {
+      cachedRow.children.forEach((child, ci) => {
+        nodes.push(...renderRow(child, level + 1, key, ci));
       });
     }
 
-    return rows;
+    return nodes;
   };
 
-  if (marketLoading) {
-    return (
-      <AnalyticsTableCard
-        title="تحليل المبيعات التفصيلي — سوق / مجموعات / مادة"
-        flag="green"
-        titleFlagNumber={5}
-      >
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="animate-spin mr-2" size={20} />
-          <span>جاري تحميل البيانات...</span>
-        </div>
-      </AnalyticsTableCard>
-    );
-  }
-
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <AnalyticsTableCard
       title="تحليل المبيعات التفصيلي — سوق / مجموعات / مادة"
       flag="green"
       titleFlagNumber={5}
       subtitles={
-        <>
-          <p
-            className="text-[11px] mt-0.5"
-            style={{ color: "var(--text-muted)" }}
-          >
-            التسلسل الهرمي: سوق — المجموعة الاولى — المجموعة الثانية — المجموعة
-            الثالثة — المادة
-          </p>
-        </>
+        <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>
+          التسلسل الهرمي: سوق — المجموعة الأولى — المجموعة الثانية — المجموعة الثالثة — المادة
+        </p>
       }
       headerExtra={
         <div
           className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[10px]"
           style={{ color: "var(--text-muted)" }}
         >
-          <span
-            className="font-medium shrink-0"
-            style={{ color: "var(--text-secondary)" }}
-          >
+          <span className="font-medium shrink-0" style={{ color: "var(--text-secondary)" }}>
             ألوان المرتجع (نسبة المرتجع / الإجمالي):
           </span>
           {RETURNS_TIERS.map((tier) => (
             <span key={tier.labelAr} className="inline-flex items-center gap-1">
               <span
                 className="inline-block rounded-sm shrink-0"
-                style={{
-                  width: 10,
-                  height: 10,
-                  background: tier.color,
-                  border: "1px solid var(--border-subtle)",
-                }}
+                style={{ width: 10, height: 10, background: tier.color, border: "1px solid var(--border-subtle)" }}
               />
               <span>{tier.labelAr}</span>
             </span>
@@ -483,51 +508,87 @@ export default function DrillDownTable({ years = "2026", branch, region }: Drill
         minWidth="1620px"
         headers={[
           { label: "الاسم", align: "right", width: "160px" },
-          ...COLUMNS.map((c) => ({
-            label: c.label,
-            align: "center" as const,
-            width: "110px" as const,
-          })),
+          ...COLUMNS.map((c) => ({ label: c.label, align: "center" as const, width: "110px" as const })),
         ]}
       >
-        {tableData.flatMap((branch, bi) => renderRow(branch, 0, "root", bi))}
+        {/* Loading state — skeleton rows inside the real table */}
+        {marketLoading && <SkeletonRows count={7} />}
 
-        {/* Total row */}
-        <tr
-          style={{
-            background: "var(--accent-green-dim)",
-            borderTop: "2px solid rgba(0,229,160,0.3)",
-          }}
-        >
-          <td style={analyticsTdBaseStyle("right")}>
-            <span
-              style={{
-                fontSize: 10,
-                fontWeight: 700,
-                color: "var(--accent-green)",
-              }}
-            >
-              الإجمالي — Total
-            </span>
-          </td>
-          {COLUMNS.map((col) => {
-            const totalVal = (totals as any)[col.key] as number | undefined;
-            const totalColor =
-              col.key === "returns"
-                ? returnsTextColor(totals.grossSales || 0, totals.returns || 0)
-                : "var(--text-secondary)";
-            return (
-              <td key={col.key} style={analyticsTdBaseStyle("center")}>
-                <span
-                  style={{ fontSize: 10, fontWeight: 700, color: totalColor }}
-                  dir="ltr"
-                >
-                  {fmt(totalVal ?? null, col.key)}
+        {/* Market-level error */}
+        {!marketLoading && marketError && (
+          <tr>
+            <td colSpan={COLUMNS.length + 1} style={{ padding: "48px 24px", textAlign: "center" }}>
+              <div className="flex flex-col items-center gap-3">
+                <AlertCircle size={20} style={{ color: "var(--accent-red)", opacity: 0.75 }} />
+                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                  تعذر تحميل بيانات المبيعات
                 </span>
-              </td>
-            );
-          })}
-        </tr>
+                <button
+                  type="button"
+                  onClick={() => marketRefetch()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-opacity hover:opacity-80"
+                  style={{
+                    fontSize:   11,
+                    background: "var(--bg-elevated)",
+                    border:     "1px solid var(--border-subtle)",
+                    color:      "var(--text-primary)",
+                    cursor:     "pointer",
+                  }}
+                >
+                  <RefreshCw size={11} />
+                  إعادة المحاولة
+                </button>
+              </div>
+            </td>
+          </tr>
+        )}
+
+        {/* Empty state */}
+        {isEmpty && (
+          <tr>
+            <td colSpan={COLUMNS.length + 1} style={{ padding: "48px 24px", textAlign: "center" }}>
+              <div className="flex flex-col items-center gap-2">
+                <Inbox size={20} style={{ color: "var(--text-muted)", opacity: 0.4 }} />
+                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                  لا توجد بيانات للفترة المحددة
+                </span>
+              </div>
+            </td>
+          </tr>
+        )}
+
+        {/* Data rows */}
+        {!marketLoading && !marketError && tableData.flatMap((row, bi) => renderRow(row, 0, "root", bi))}
+
+        {/* Total row — only when data available */}
+        {!marketLoading && !marketError && !isEmpty && (
+          <tr
+            style={{
+              background:  "var(--accent-green-dim)",
+              borderTop:   "2px solid rgba(0,229,160,0.3)",
+            }}
+          >
+            <td style={analyticsTdBaseStyle("right")}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: "var(--accent-green)" }}>
+                الإجمالي — Total
+              </span>
+            </td>
+            {COLUMNS.map((col) => {
+              const totalVal   = (totals as any)[col.key] as number | undefined;
+              const totalColor =
+                col.key === "returns"
+                  ? returnsTextColor(totals.grossSales ?? 0, totals.returns ?? 0)
+                  : "var(--text-secondary)";
+              return (
+                <td key={col.key} style={analyticsTdBaseStyle("center")}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: totalColor }} dir="ltr">
+                    {fmt(totalVal ?? null, col.key)}
+                  </span>
+                </td>
+              );
+            })}
+          </tr>
+        )}
       </AnalyticsTable>
     </AnalyticsTableCard>
   );

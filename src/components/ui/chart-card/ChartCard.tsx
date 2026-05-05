@@ -30,15 +30,11 @@ interface ChartCardProps {
   titleFlagNumber?: number;
   headerExtra?: React.ReactNode;
   className?: string;
-  /** Allow scrolling inside the plot area only. */
   plotOverflowY?: "hidden" | "auto" | "visible";
-  /** Override the inner ECharts canvas height (enables plot scrolling). */
   innerChartHeight?: string;
   option: Record<string, unknown>;
   height?: string;
-  /** Optional inner chart width for horizontal scrolling without stretching the card. */
   width?: string;
-  /** Controls the horizontal scroll container direction when the chart is wider than the card. */
   scrollViewportDir?: "ltr" | "rtl";
   delay?: number;
   aiPowered?: boolean;
@@ -180,13 +176,10 @@ function fixLightSeriesLabels(
     currentColor: unknown,
   ): string | undefined => {
     const c = typeof currentColor === "string" ? currentColor : undefined;
-
-    // Most light-mode fixes are just "avoid near-white labels".
     if (seriesType === "bar" || seriesType === "line") {
       if (c === "#fff" || c === "#e2e8f0") return "#475569";
       return undefined;
     }
-
     const isGraphLike =
       seriesType === "graph" ||
       seriesType === "pie" ||
@@ -195,12 +188,10 @@ function fixLightSeriesLabels(
       if (c === "#e2e8f0") return "#0f172a";
       return c ?? "#475569";
     }
-
     if (seriesType === "heatmap") {
       if (c === "#e2e8f0") return "#0f172a";
       return c ?? "#0f172a";
     }
-
     return undefined;
   };
 
@@ -495,19 +486,6 @@ function ChartCard({
     return buildMergedOption({ baseTheme, option, isDark });
   }, [option, baseTheme, isDark]);
 
-  // useEffect(() => {
-  //   if (!isFullscreen) return;
-  //   const run = () => resizeFullscreenChart();
-  //   const raf = requestAnimationFrame(run);
-  //   const t1 = window.setTimeout(run, 80);
-  //   const t2 = window.setTimeout(run, 400);
-  //   return () => {
-  //     cancelAnimationFrame(raf);
-  //     window.clearTimeout(t1);
-  //     window.clearTimeout(t2);
-  //   };
-  // }, [isFullscreen, resizeFullscreenChart, mergedOption]);
-
   useEffect(() => {
     if (!isFullscreen) return;
     const onWinResize = () => resizeFullscreenChart();
@@ -536,19 +514,18 @@ function ChartCard({
   const fullscreenChartNode = useMemo(() => chartEl("100%", true), [chartEl]);
 
   const showTitleBlock = Boolean(title || subtitle);
-  /** Tall inner canvas + plotOverflowY auto: inner wrapper must expand so the plot container can scroll. */
   const plotScrollsWithInnerHeight =
     plotOverflowY === "auto" && Boolean(innerChartHeight);
   const hasCustomChartWidth = width !== "100%";
 
   const chartShell = (
     <>
-      <div
-        className={`${className} px-5 pt-4 pb-2 gap-3 ${showTitleBlock ? "justify-between" : "justify-end"}`}
-      >
-        {showTitleBlock && (
-          <div className="min-w-0 flex items-center gap-2 justify-between w-full">
-            <div className="w-full">
+      {/* ── Header: title (left) + headerExtra (center/right) + expand btn ── */}
+      <div className="px-5 pt-4 pb-2">
+        <div className="flex items-start gap-3 w-full">
+          {/* Title + subtitle — shrinks but never wraps aggressively */}
+          {showTitleBlock && (
+            <div className="shrink-0">
               <div className="flex items-center gap-2">
                 {titleLeading}
                 {titleFlag && (
@@ -559,7 +536,7 @@ function ChartCard({
                   />
                 )}
                 <h3
-                  className="text-sm font-semibold"
+                  className="text-sm font-semibold whitespace-nowrap"
                   style={{ color: "var(--text-primary)" }}
                 >
                   {title}
@@ -567,40 +544,50 @@ function ChartCard({
               </div>
               {subtitle && (
                 <p
-                  className="text-[11px] mt-0.5"
+                  className="text-[11px] mt-0.5 whitespace-nowrap"
                   style={{ color: "var(--text-muted)" }}
                 >
                   {subtitle}
                 </p>
               )}
             </div>
-            <button
-              type="button"
-              onClick={toggleFullscreen}
-              className="p-1.5 rounded-md transition-all hover:scale-110 self-start"
-              style={{ color: "var(--text-muted)" }}
-              title="تكبير الشارت"
-            >
-              <Maximize2 size={14} />
-            </button>
-          </div>
-        )}
-        <div className="flex items-center gap-2 mb-5">
-          {headerExtra}
-          {aiPowered && (
-            <span
-              className="text-[10px] px-2 py-0.5 rounded-full font-semibold"
-              style={{
-                background: "var(--accent-cyan-dim)",
-                color: "var(--accent-cyan)",
-                border: "1px solid rgba(0,212,255,0.2)",
-              }}
-            >
-              AI
-            </span>
           )}
+
+          {/* headerExtra — takes all remaining space, content aligns end (RTL right) */}
+          {(headerExtra || aiPowered) && (
+            <div className="flex-1 flex items-start justify-end gap-2 min-w-0 overflow-visible">
+              <div className="flex flex-col items-end gap-1.5 min-w-0 overflow-visible">
+                {headerExtra}
+              </div>
+              {aiPowered && (
+                <span
+                  className="text-[10px] px-2 py-0.5 rounded-full font-semibold shrink-0 mt-0.5"
+                  style={{
+                    background: "var(--accent-cyan-dim)",
+                    color: "var(--accent-cyan)",
+                    border: "1px solid rgba(0,212,255,0.2)",
+                  }}
+                >
+                  AI
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Expand button — always far right */}
+          <button
+            type="button"
+            onClick={toggleFullscreen}
+            className="p-1.5 rounded-md transition-all hover:scale-110 shrink-0"
+            style={{ color: "var(--text-muted)" }}
+            title="تكبير الشارت"
+          >
+            <Maximize2 size={14} />
+          </button>
         </div>
       </div>
+
+      {/* ── Chart area ── */}
       <div
         className={
           hasCustomChartWidth
