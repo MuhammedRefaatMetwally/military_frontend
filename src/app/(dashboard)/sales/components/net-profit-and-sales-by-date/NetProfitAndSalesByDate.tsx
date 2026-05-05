@@ -6,6 +6,7 @@ import { useFilterStore } from "@/store/filterStore";
 import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
+import { AnalyticsLoader } from "@/components/ui/analytics-loader";
 
 const ChartCard = dynamic(
   () => import("@/components/ui/chart-card/ChartCard"),
@@ -378,93 +379,111 @@ const NetProfitAndSalesByDate = () => {
 
   // ── render ─────────────────────────────────────────────────────────────────
   return (
-    <ChartCard
-      title="صافي الأرباح والمبيعات حسب التاريخ"
-      subtitle={subtitle}
-      titleFlag="green"
-      titleFlagNumber={1}
-      headerExtra={
-        <div className="flex flex-col items-end gap-2" dir="rtl">
-          {/* Row 1: indicator | level toggles */}
-          <div className="flex items-center gap-2 flex-wrap justify-end">
-            {/* المؤشر */}
-            <div className="flex items-center gap-1">
-              <span className="text-[9px] shrink-0" style={{ color: "var(--text-muted)" }}>
-                المؤشر:
-              </span>
-              {indicatorButtons.map(({ value, label }) => (
-                <button
-                  key={value}
-                  type="button"
-                  disabled={isLoadingOrFetching}
-                  onClick={() => setSeriesMode(value)}
-                  className="px-2 py-1 rounded-md text-[10px] font-medium"
-                  style={btnStyle(seriesMode === value, palette.primaryCyan, isLoadingOrFetching)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            {/* Separator */}
-            <span style={{ width: 1, height: 18, background: "var(--border-subtle)", display: "inline-block", flexShrink: 0 }} />
-
-            {/* المستوى */}
-            <div className="flex items-center gap-1">
-              <span className="text-[9px] shrink-0" style={{ color: "var(--text-muted)" }}>
-                المستوى:
-              </span>
-              {levelButtons.map(({ value, label }) => (
-                <button
-                  key={value}
-                  type="button"
-                  disabled={isLoadingOrFetching}
-                  onClick={() => handleLevelChange(value)}
-                  className="px-2 py-1 rounded-md text-[10px] font-medium"
-                  style={btnStyle(level === value, palette.primaryGreen, isLoadingOrFetching)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            {/* Live fetching indicator — inline, doesn't shift layout */}
-            {isLoadingOrFetching && (
-              <FetchingDots color={palette.primaryGreen} />
-            )}
-
-            {/* Error retry button — inline with controls */}
-            {isError && !isLoadingOrFetching && (
-              <button
-                type="button"
-                onClick={() => refetch()}
-                className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium transition-opacity hover:opacity-80"
-                style={{
-                  background: "rgba(239,68,68,0.1)",
-                  border: "1px solid rgba(239,68,68,0.35)",
-                  color: "var(--accent-red)",
-                }}
-              >
-                ↻ إعادة المحاولة
-              </button>
-            )}
-          </div>
-
-          {/* Row 2: sub-period buttons */}
-          <SubPeriodRow
-            level={level}
-            selectedQuarters={selectedQuarters}
-            toggleQuarter={toggleQuarter}
-            selectedMonths={selectedMonths}
-            toggleMonth={toggleMonth}
-            accentColor={palette.primaryGreen}
-            disabled={isLoadingOrFetching}
+    <div className="relative">
+      {/* Loading Overlay */}
+      {isLoadingOrFetching && (
+        <div 
+          className="absolute inset-0 z-20 flex items-center justify-center rounded-xl"
+          style={{
+            background: "rgba(0, 0, 0, 0.4)",
+            backdropFilter: "blur(4px)",
+          }}
+        >
+          <AnalyticsLoader 
+            variant="compact" 
+            title="جاري تحميل البيانات" 
           />
         </div>
-      }
-      option={option}
-      height="300px"
-    />
+      )}
+      
+      <ChartCard
+        title="صافي الأرباح والمبيعات حسب التاريخ"
+        subtitle={subtitle}
+        titleFlag="green"
+        titleFlagNumber={1}
+        headerExtra={
+          <div className="flex flex-col items-end gap-2" dir="rtl">
+            {/* Row 1: indicator | level toggles */}
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              {/* المؤشر */}
+              <div className="flex items-center gap-1">
+                <span className="text-[9px] shrink-0" style={{ color: "var(--text-muted)" }}>
+                  المؤشر:
+                </span>
+                {indicatorButtons.map(({ value, label }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    disabled={isLoadingOrFetching}
+                    onClick={() => setSeriesMode(value)}
+                    className="px-2 py-1 rounded-md text-[10px] font-medium"
+                    style={btnStyle(seriesMode === value, palette.primaryCyan, isLoadingOrFetching)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Separator */}
+              <span style={{ width: 1, height: 18, background: "var(--border-subtle)", display: "inline-block", flexShrink: 0 }} />
+
+              {/* المستوى */}
+              <div className="flex items-center gap-1">
+                <span className="text-[9px] shrink-0" style={{ color: "var(--text-muted)" }}>
+                  المستوى:
+                </span>
+                {levelButtons.map(({ value, label }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    disabled={isLoadingOrFetching}
+                    onClick={() => handleLevelChange(value)}
+                    className="px-2 py-1 rounded-md text-[10px] font-medium"
+                    style={btnStyle(level === value, palette.primaryGreen, isLoadingOrFetching)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Live fetching indicator — inline, doesn't shift layout */}
+              {isLoadingOrFetching && (
+                <FetchingDots color={palette.primaryGreen} />
+              )}
+
+              {/* Error retry button — inline with controls */}
+              {isError && !isLoadingOrFetching && (
+                <button
+                  type="button"
+                  onClick={() => refetch()}
+                  className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium transition-opacity hover:opacity-80"
+                  style={{
+                    background: "rgba(239,68,68,0.1)",
+                    border: "1px solid rgba(239,68,68,0.35)",
+                    color: "var(--accent-red)",
+                  }}
+                >
+                  ↻ إعادة المحاولة
+                </button>
+              )}
+            </div>
+
+            {/* Row 2: sub-period buttons */}
+            <SubPeriodRow
+              level={level}
+              selectedQuarters={selectedQuarters}
+              toggleQuarter={toggleQuarter}
+              selectedMonths={selectedMonths}
+              toggleMonth={toggleMonth}
+              accentColor={palette.primaryGreen}
+              disabled={isLoadingOrFetching}
+            />
+          </div>
+        }
+        option={option}
+        height="300px"
+      />
+    </div>
   );
 };
 

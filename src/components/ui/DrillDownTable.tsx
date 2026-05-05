@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useCallback } from "react";
 import { ChevronDown, ChevronLeft, Loader2, AlertCircle, RefreshCw, Inbox } from "lucide-react";
+import { AnalyticsLoader } from "@/components/ui/analytics-loader";
 import AnalyticsTableCard from "@/components/ui/AnalyticsTableCard";
 import {
   AnalyticsBarCell,
@@ -91,40 +92,7 @@ function returnsTextColor(grossSales: number, returns: number): string {
 }
 
 
-function SkeletonRows({ count = 6 }: { count?: number }) {
-  return (
-    <>
-      {Array.from({ length: count }).map((_, i) => (
-        <tr key={i} style={{ borderBottom: "1px solid var(--border-subtle)" }}>
-          <td style={analyticsTdBaseStyle("right")}>
-            <div
-              className="animate-pulse rounded"
-              style={{
-                height: 12,
-                width: `${60 + (i % 3) * 15}%`,
-                background: "var(--bg-elevated)",
-                opacity: 1 - i * 0.1,
-              }}
-            />
-          </td>
-          {COLUMNS.map((col) => (
-            <td key={col.key} style={analyticsTdBaseStyle("center")}>
-              <div
-                className="animate-pulse rounded mx-auto"
-                style={{
-                  height: 10,
-                  width: "60%",
-                  background: "var(--bg-elevated)",
-                  opacity: 1 - i * 0.1,
-                }}
-              />
-            </td>
-          ))}
-        </tr>
-      ))}
-    </>
-  );
-}
+
 
 
 function fmt(v: number | null, key: string): string {
@@ -448,16 +416,12 @@ regionIds: region ? region.split(",") : undefined,
       );
     }
 
-    // Children skeleton rows while loading
+    // Children loading - centered loader box
     if (isOpen && isChildLoading) {
       nodes.push(
-        <tr key={`${key}-skeleton`} style={{ borderBottom: "1px solid var(--border-subtle)" }}>
-          <td colSpan={COLUMNS.length + 1} style={{ padding: "4px 0" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <tbody>
-                <SkeletonRows count={3} />
-              </tbody>
-            </table>
+        <tr key={`${key}-loading`} style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+          <td colSpan={COLUMNS.length + 1} style={{ padding: 0, position: "relative", height: 80 }}>
+            <AnalyticsLoader variant="compact" title="جاري تحميل البيانات" />
           </td>
         </tr>,
       );
@@ -511,8 +475,14 @@ regionIds: region ? region.split(",") : undefined,
           ...COLUMNS.map((c) => ({ label: c.label, align: "center" as const, width: "110px" as const })),
         ]}
       >
-        {/* Loading state — skeleton rows inside the real table */}
-        {marketLoading && <SkeletonRows count={7} />}
+        {/* Loading state — centered loader */}
+        {marketLoading && (
+          <tr>
+            <td colSpan={COLUMNS.length + 1} style={{ padding: 0, position: "relative", height: 200 }}>
+              <AnalyticsLoader variant="compact" title="جاري تحميل البيانات" />
+            </td>
+          </tr>
+        )}
 
         {/* Market-level error */}
         {!marketLoading && marketError && (
