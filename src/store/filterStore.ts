@@ -6,6 +6,11 @@ export interface FilterState {
     // ── فلاتر لحظية (فروع متعددة + فترة) ── [] = كل الفروع
     activeBranches: string[];
     activePeriod: string;
+    // ── نطاق التاريخ المخصص (من/إلى بصيغة YYYY-MM-DD) ──
+    dateRangeFrom: string;
+    dateRangeTo: string;
+    // ── هل تم تطبيق نطاق التاريخ المخصص ──
+    isDateRangeApplied: boolean;
 
     // ── فلاتر متقدمة ──
     year: string;
@@ -79,11 +84,16 @@ interface FilterActions {
     applyFilters: () => void;
     resetFilters: () => void;
     setLoading: (loading: boolean) => void;
+    setDateRange: (from: string, to: string) => void;
+    applyDateRange: () => void;
 }
 
 const defaultFilters: FilterState = {
     activeBranches: [],
     activePeriod: 'month',
+    dateRangeFrom: '',
+    dateRangeTo: '',
+    isDateRangeApplied: false,
     year: new Date().getFullYear().toString(),
     quarter: '',
     month: '',
@@ -133,4 +143,6 @@ export const useFilterStore = create<FilterState & FilterActions>((set) => ({
     applyFilters: () => set({ isApplied: true, isLoading: true }),
     resetFilters: () => set({ ...defaultFilters }),
     setLoading: (loading) => set({ isLoading: loading }),
+    setDateRange: (from, to) => set({ dateRangeFrom: from, dateRangeTo: to }),
+    applyDateRange: () => set({ isDateRangeApplied: true, isLoading: true }),
 }));

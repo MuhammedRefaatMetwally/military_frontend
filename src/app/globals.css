@@ -172,7 +172,14 @@
   scrollbar-color: var(--border-default) transparent;
 }
 
-*::-webkit-scrollbar {
+.hide-scrollbar::-webkit-scrollbar,
+.hide-scrollbar *::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.has-scrollbar::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }

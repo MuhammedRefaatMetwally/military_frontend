@@ -168,8 +168,13 @@ function HierarchyColumn({
 
       {/* Body */}
       <div
-        className="overflow-y-auto flex-1 min-h-0"
-        style={{ maxHeight: "650px", paddingRight: "2px" }}
+        className="overflow-y-auto flex-1 min-h-0 hide-scrollbar"
+        style={{
+          maxHeight: "650px",
+          paddingRight: "2px",
+          scrollbarWidth: "none", // Firefox
+          msOverflowStyle: "none", // IE
+        }}
       >
         {isFetching && (
           <AnalyticsLoader variant="compact" title="جاري التحميل" />
@@ -414,45 +419,116 @@ export default function SalesHierarchyAnalysis() {
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="flex items-center gap-2 px-5 py-2 border-b flex-wrap"
+            className="border-b overflow-hidden"
             style={{ borderColor: "var(--border-subtle)" }}
           >
-            {path.map((lvl, i) => (
-              <span
-                key={lvl.node.id}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium"
-                style={{
-                  background: "rgba(37,99,235,0.12)",
-                  border: "1px solid rgba(37,99,235,0.3)",
-                }}
-              >
-                <span style={{ color: "var(--text-muted)", fontSize: "10px" }}>
-                  {HIERARCHY_TITLES[lvl.at]}
-                </span>
-                <span style={{ color: "var(--accent-blue)" }}>
-                  {lvl.node.label}
-                </span>
-                <button
-                  onClick={() => handleDeselect(i)}
-                  className="opacity-60 hover:opacity-100 transition-opacity"
-                >
-                  <X size={10} />
-                </button>
-              </span>
-            ))}
-            <button
-              onClick={() => setPath([])}
-              className="text-[10px] underline"
-              style={{ color: "var(--text-muted)" }}
+            <div
+              className="px-5 py-2.5 flex items-center gap-1 flex-nowrap overflow-x-auto hide-scrollbar"
+              dir="rtl"
             >
-              مسح الكل
-            </button>
+              {/* Root */}
+              <button
+                onClick={() => setPath([])}
+                className="flex items-center gap-1 shrink-0 px-2 py-1 rounded-md hover:opacity-70 transition-opacity"
+                style={{ color: "var(--text-muted)" }}
+              >
+                <svg
+                  width="11"
+                  height="11"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                  <polyline points="9 22 9 12 15 12 15 22" />
+                </svg>
+                <span className="text-[11px] font-medium">الكل</span>
+              </button>
+
+              {path.map((lvl, i) => {
+                const isLast = i === path.length - 1;
+                return (
+                  <React.Fragment key={lvl.node.id}>
+                    {/* Separator */}
+                    <svg
+                      width="10"
+                      height="10"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="shrink-0 rotate-180"
+                      style={{
+                        color: "var(--text-muted)",
+                        opacity: 0.4,
+                        flexShrink: 0,
+                      }}
+                    >
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+
+                    {isLast ? (
+                      <span
+                        className="inline-flex items-center gap-1.5 shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-semibold"
+                        style={{
+                          background: "rgba(37,99,235,0.12)",
+                          border: "1px solid rgba(37,99,235,0.3)",
+                          color: "var(--accent-blue)",
+                          maxWidth: "160px",
+                        }}
+                      >
+                        <span
+                          className="truncate"
+                          title={lvl.node.label}
+                          style={{ minWidth: 0 }}
+                        >
+                          {lvl.node.label}
+                        </span>
+                        <button
+                          onClick={() => handleDeselect(i)}
+                          className="shrink-0 opacity-60 hover:opacity-100 transition-opacity"
+                          style={{ color: "var(--accent-blue)", lineHeight: 1 }}
+                        >
+                          <X size={9} />
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleDeselect(i + 1)}
+                        className="shrink-0 px-2 py-1 rounded-md hover:opacity-70 transition-opacity"
+                        style={{ maxWidth: "120px" }}
+                        title={lvl.node.label}
+                      >
+                        <span
+                          className="block text-[11px] font-medium truncate"
+                          style={{ color: "var(--text-primary)" }}
+                        >
+                          {lvl.node.label}
+                        </span>
+                      </button>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
 
       {/* Columns */}
-      <div ref={scrollRef} className="overflow-x-auto p-5">
+      <div
+        ref={scrollRef}
+        className="overflow-x-auto p-5"
+        style={{
+          scrollbarWidth: "none",
+          msOverflowStyle: "none",
+        }}
+      >
         <div className="flex w-max me-auto gap-2 items-stretch" dir="ltr">
           {visibleColumns.map((at, colIdx) => {
             const p = getColParams(colIdx);

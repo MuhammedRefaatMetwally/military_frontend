@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useClickOutside } from "@/hooks/useClickOutside";
 import { QUICK_PERIODS } from "@/utils/filterUtils";
 import { Calendar, ChevronDown } from "lucide-react";
+import { useFilterStore } from "@/store/filterStore";
 
 export function DateFilterDropdown({
   activePeriod,
@@ -188,8 +189,9 @@ export function DateFilterDropdown({
                       );
                     }
 
-                    // /sales في «فترة محددة»: شهر/سنة فقط
-                    if (useMonthRangePickers && rangeGranularity === "month") {
+                    // Default behavior: month/year only (no days)
+                    // This applies for /sales, /branches, and all other pages with custom date range
+                    {
                       // Derive YYYY-MM for the month input from stored ISO date (if any)
                       const ym =
                         f.val && f.val.length >= 7 ? f.val.slice(0, 7) : "";
@@ -247,41 +249,15 @@ export function DateFilterDropdown({
                         </div>
                       );
                     }
-
-                    // Default behaviour: full date
-                    return (
-                      <div key={f.label}>
-                        <label
-                          style={{
-                            fontSize: 9,
-                            color: "var(--text-muted)",
-                            display: "block",
-                            marginBottom: 3,
-                          }}
-                        >
-                          {f.label}
-                        </label>
-                        <input
-                          type="date"
-                          value={f.val}
-                          onChange={(e) => f.set(e.target.value)}
-                          style={{
-                            width: "100%",
-                            padding: "5px 8px",
-                            borderRadius: 7,
-                            background: "var(--bg-elevated)",
-                            border: "1px solid var(--border-subtle)",
-                            color: "var(--text-primary)",
-                            fontSize: 11,
-                            outline: "none",
-                          }}
-                        />
-                      </div>
-                    );
                   })}
                   {(dateFrom || dateTo) && (
                     <button
-                      onClick={() => setOpen(false)}
+                      onClick={() => {
+                        // تطبيق نطاق التاريخ في المتجر
+                        useFilterStore.getState().setDateRange(dateFrom, dateTo);
+                        useFilterStore.getState().applyDateRange();
+                        setOpen(false);
+                      }}
                       style={{
                         padding: "6px 0",
                         borderRadius: 7,
@@ -291,6 +267,7 @@ export function DateFilterDropdown({
                         fontWeight: 600,
                         border: "none",
                         cursor: "pointer",
+                        transition: "all 0.2s",
                       }}
                     >
                       تطبيق
