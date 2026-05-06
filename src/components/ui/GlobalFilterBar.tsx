@@ -22,7 +22,6 @@ import {
   ShoppingCart,
   Handshake,
 } from "lucide-react";
-import { useFilterStore } from "@/store/filterStore";
 import {
   AI_BASKET_HOLIDAY_OPTIONS,
   AI_BASKET_OFFERS,
@@ -63,6 +62,7 @@ import {
 
 import { toCsv } from "@/api/utils";
 import { InfiniteDropdown } from "./Infinitedropdown";
+import { useFilterStore } from "@/store/filterStore";
 
 
 const DEFAULT_INSTANT_PERIOD       = "month";
@@ -119,6 +119,7 @@ export default function GlobalFilterBar() {
 
   const {
     activeBranches, activePeriod,
+    dateRangeFrom, dateRangeTo, isDateRangeApplied,
     workShift, returnRateRange, employeeCities,
     dailyInvoiceRatioRange, employeePerformanceRatioRange,
     aiBasketCities, aiBasketSaleTime, aiBasketHoliday, aiBasketOffers, aiBasketValueRange,
@@ -126,7 +127,7 @@ export default function GlobalFilterBar() {
     agreement, holiday,
     customersCities, customersSaleTime, customersOffers,
     customersSaleMethod, customersBasketValueRange,
-    setActiveBranches, setActivePeriod, setFilter,
+    setActiveBranches, setActivePeriod, setFilter, setLoading,
   } = useFilterStore();
 
   const [activeRegions,          setActiveRegions]          = useState<string[]>([]);
@@ -292,6 +293,28 @@ export default function GlobalFilterBar() {
     const ap = useFilterStore.getState().activePeriod;
     if (SALES_QUICK_PERIOD_VALUES.has(ap)) setActivePeriod(DEFAULT_INSTANT_PERIOD);
   }, [isSalesPage, isBranchesPage, isEmployeesPage, isBasketLikePage, setActivePeriod]);
+
+  // Handle date range applied from the store (from DateFilterDropdown "تطبيق" button)
+  useEffect(() => {
+    if (!isDateRangeApplied || !dateRangeFrom || !dateRangeTo) return;
+    
+    console.log("[v0] Date range applied from store:", { dateRangeFrom, dateRangeTo });
+    
+    // Update local state with the applied date range
+    setDateFrom(dateRangeFrom);
+    setDateTo(dateRangeTo);
+    
+    // Trigger filter updates for all pages that support date range filtering
+    const { year, quarter, month, day } = deriveDateFilters(dateRangeFrom, dateRangeTo);
+    setFilter("year", year);
+    setFilter("quarter", quarter);
+    setFilter("month", month);
+    setFilter("day", day);
+    
+    // Reset the applied flag
+    setLoading(false);
+    useFilterStore.getState().setFilter("isDateRangeApplied", false);
+  }, [isDateRangeApplied, dateRangeFrom, dateRangeTo, setFilter, setLoading]);
 
   useEffect(() => {
     const el = document.getElementById("dashboard-scroll-root");

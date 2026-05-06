@@ -21,6 +21,7 @@ import {
   SalesBreakdownRecord,
 } from "@/api/sales-analyses";
 import { useDetailedSalesBreakdown } from "@/hooks/useSalesAnalyses";
+import { fmt, fmtFull } from "@/api/utils";
 
 interface RowData {
   id: string;
@@ -106,22 +107,7 @@ function returnsTextColor(grossSales: number, returns: number): string {
   return RETURNS_TIERS[RETURNS_TIERS.length - 1].color;
 }
 
-function fmt(v: number | null, key: string): string {
-  if (v === null) return "—";
-  if (key === "avgPrice") return v.toFixed(2);
-  if (key === "discountPct" || key === "avgDiscRate") return `${v.toFixed(2)}%`;
-  if (
-    key === "itemCount" ||
-    key === "invoiceCount" ||
-    key === "returnedItemCount"
-  )
-    return Math.round(v).toLocaleString("en-US");
-  if (key === "returns") return v.toFixed(2);
-  return v.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
+
 
 const LEVEL_TEXT_COLORS = [
   "var(--text-primary)",
@@ -203,51 +189,75 @@ export default function DrillDownTable({
       parentGroup3Id?: string,
     ) => {
       if (row.childrenLoaded) return;
-  
+
       const nextLevel =
-        row.level === "market"  ? "group1"  :
-        row.level === "group1"  ? "group2"  :
-        row.level === "group2"  ? "group3"  : "product";
-  
+        row.level === "market"
+          ? "group1"
+          : row.level === "group1"
+            ? "group2"
+            : row.level === "group2"
+              ? "group3"
+              : "product";
+
       setLoadingKeys((prev) => new Set(prev).add(rowKey));
-      setErrorKeys((prev) => { const s = new Set(prev); s.delete(rowKey); return s; });
-  
+      setErrorKeys((prev) => {
+        const s = new Set(prev);
+        s.delete(rowKey);
+        return s;
+      });
+
       try {
-        const branchIdToSend  = row.level === "market" ? row.id : parentBranchId;
-        const group1IdToSend  = row.level === "group1" ? row.id : parentGroup1Id;
-        const group2IdToSend  = row.level === "group2" ? row.id : parentGroup2Id;
-        const group3IdToSend  = row.level === "group3" ? row.id : parentGroup3Id;
-  
+        const branchIdToSend = row.level === "market" ? row.id : parentBranchId;
+        const group1IdToSend = row.level === "group1" ? row.id : parentGroup1Id;
+        const group2IdToSend = row.level === "group2" ? row.id : parentGroup2Id;
+        const group3IdToSend = row.level === "group3" ? row.id : parentGroup3Id;
+
         const json = await getDetailedSalesBreakdown({
-          at:        nextLevel,
-          years:     years ? years.split(",").map(Number) : undefined,
-          branchIds: branchIdToSend  || undefined,
-          group1Ids: group1IdToSend  ? [group1IdToSend]  : undefined,
-          group2Ids: group2IdToSend  ? [group2IdToSend]  : undefined,
-          group3Ids: group3IdToSend  ? [group3IdToSend]  : undefined,
+          at: nextLevel,
+          years: years ? years.split(",").map(Number) : undefined,
+          branchIds: branchIdToSend || undefined,
+          group1Ids: group1IdToSend ? [group1IdToSend] : undefined,
+          group2Ids: group2IdToSend ? [group2IdToSend] : undefined,
+          group3Ids: group3IdToSend ? [group3IdToSend] : undefined,
         });
-  
-        const children: RowData[] = (json.data ?? []).map((record: SalesBreakdownRecord) => ({
-          ...apiRecordToRowData(record, nextLevel as RowData["level"]),
-          children:       [],
-          childrenLoaded: false,
-          childrenError:  false,
-        }));
-  
+
+        const children: RowData[] = (json.data ?? []).map(
+          (record: SalesBreakdownRecord) => ({
+            ...apiRecordToRowData(record, nextLevel as RowData["level"]),
+            children: [],
+            childrenLoaded: false,
+            childrenError: false,
+          }),
+        );
+
         setRowCache((prev) => {
           const next = new Map(prev);
-          next.set(rowKey, { ...row, children, childrenLoaded: true, childrenError: false });
+          next.set(rowKey, {
+            ...row,
+            children,
+            childrenLoaded: true,
+            childrenError: false,
+          });
           return next;
         });
       } catch {
         setRowCache((prev) => {
           const next = new Map(prev);
-          next.set(rowKey, { ...row, children: [], childrenLoaded: false, childrenError: true });
+          next.set(rowKey, {
+            ...row,
+            children: [],
+            childrenLoaded: false,
+            childrenError: true,
+          });
           return next;
         });
         setErrorKeys((prev) => new Set(prev).add(rowKey));
       } finally {
-        setLoadingKeys((prev) => { const s = new Set(prev); s.delete(rowKey); return s; });
+        setLoadingKeys((prev) => {
+          const s = new Set(prev);
+          s.delete(rowKey);
+          return s;
+        });
       }
     },
     [years],
@@ -265,13 +275,20 @@ export default function DrillDownTable({
       setExpanded((prev) => {
         const isOpen = prev[rowKey] === true;
         if (isOpen) return { ...prev, [rowKey]: false };
-  
+
         if (!row.childrenLoaded && row.level !== "product") {
           const branchId = row.level === "market" ? row.id : parentBranchId;
           const group1Id = row.level === "group1" ? row.id : parentGroup1Id;
           const group2Id = row.level === "group2" ? row.id : parentGroup2Id;
           const group3Id = row.level === "group3" ? row.id : parentGroup3Id;
-          loadChildren(rowKey, row, branchId ?? "", group1Id, group2Id, group3Id);
+          loadChildren(
+            rowKey,
+            row,
+            branchId ?? "",
+            group1Id,
+            group2Id,
+            group3Id,
+          );
         }
         return { ...prev, [rowKey]: true };
       });
@@ -288,8 +305,19 @@ export default function DrillDownTable({
       parentGroup2Id?: string,
       parentGroup3Id?: string,
     ) => {
-      setErrorKeys((prev) => { const s = new Set(prev); s.delete(rowKey); return s; });
-      loadChildren(rowKey, row, parentBranchId ?? "", parentGroup1Id, parentGroup2Id, parentGroup3Id);
+      setErrorKeys((prev) => {
+        const s = new Set(prev);
+        s.delete(rowKey);
+        return s;
+      });
+      loadChildren(
+        rowKey,
+        row,
+        parentBranchId ?? "",
+        parentGroup1Id,
+        parentGroup2Id,
+        parentGroup3Id,
+      );
     },
     [loadChildren],
   );
@@ -344,84 +372,126 @@ export default function DrillDownTable({
     activeGroup2Id?: string,
     activeGroup3Id?: string,
   ): React.ReactNode[] => {
-    const key        = `${parentKey}-${idx}`;
-    const cachedRow  = rowCache.get(key) ?? row;
-    const isOpen     = expanded[key] === true;
+    const key = `${parentKey}-${idx}`;
+    const cachedRow = rowCache.get(key) ?? row;
+    const isOpen = expanded[key] === true;
     const isChildLoading = loadingKeys.has(key);
-    const isChildError   = errorKeys.has(key);
-    const canExpand  = level < 4;
-    const indent     = level * 24;
-  
-    const colorIdx   = Math.min(level, LEVEL_TEXT_COLORS.length - 1);
+    const isChildError = errorKeys.has(key);
+    const canExpand = level < 4;
+    const indent = level * 24;
+
+    const colorIdx = Math.min(level, LEVEL_TEXT_COLORS.length - 1);
     const chevronIdx = Math.min(level, CHEVRON_COLORS.length - 1);
-    const rowBg      = (isOpen ? ROW_BG_OPEN : ROW_BG_CLOSED)[Math.min(level, 4)];
-  
+    const rowBg = (isOpen ? ROW_BG_OPEN : ROW_BG_CLOSED)[Math.min(level, 4)];
+
     // Compute what each child level will need
     const nextBranchId = row.level === "market" ? row.id : activeBranchId;
     const nextGroup1Id = row.level === "group1" ? row.id : activeGroup1Id;
     const nextGroup2Id = row.level === "group2" ? row.id : activeGroup2Id;
     const nextGroup3Id = row.level === "group3" ? row.id : activeGroup3Id;
-  
+
     const nodes: React.ReactNode[] = [];
-  
+
     nodes.push(
       <tr
         key={key}
-        className={canExpand ? "cursor-pointer hover:bg-white/[0.015] transition-colors" : undefined}
-        style={{ borderBottom: "1px solid var(--border-subtle)", background: rowBg }}
+        className={
+          canExpand
+            ? "cursor-pointer hover:bg-white/[0.015] transition-colors"
+            : undefined
+        }
+        style={{
+          borderBottom: "1px solid var(--border-subtle)",
+          background: rowBg,
+        }}
         onClick={() =>
           canExpand &&
-          toggle(key, cachedRow, activeBranchId, activeGroup1Id, activeGroup2Id, activeGroup3Id)
+          toggle(
+            key,
+            cachedRow,
+            activeBranchId,
+            activeGroup1Id,
+            activeGroup2Id,
+            activeGroup3Id,
+          )
         }
       >
         {/* Name cell */}
-        <td style={{ ...analyticsTdBaseStyle("right"), paddingRight: `${indent + 12}px` }}>
+        <td
+          style={{
+            ...analyticsTdBaseStyle("right"),
+            paddingRight: `${indent + 12}px`,
+          }}
+        >
           <div className="flex items-center gap-1.5">
             {canExpand ? (
               <span
                 style={{
-                  display:        "inline-flex",
-                  alignItems:     "center",
+                  display: "inline-flex",
+                  alignItems: "center",
                   justifyContent: "center",
-                  width:          16,
-                  height:         16,
-                  borderRadius:   4,
-                  background:     isOpen ? "rgba(0,229,160,0.11)" : "var(--bg-elevated)",
-                  transition:     "all 0.2s",
-                  flexShrink:     0,
+                  width: 16,
+                  height: 16,
+                  borderRadius: 4,
+                  background: isOpen
+                    ? "rgba(0,229,160,0.11)"
+                    : "var(--bg-elevated)",
+                  transition: "all 0.2s",
+                  flexShrink: 0,
                 }}
               >
                 {isChildLoading ? (
-                  <Loader2 size={10} className="animate-spin" style={{ color: CHEVRON_COLORS[chevronIdx] }} />
+                  <Loader2
+                    size={10}
+                    className="animate-spin"
+                    style={{ color: CHEVRON_COLORS[chevronIdx] }}
+                  />
                 ) : isOpen ? (
-                  <ChevronDown size={11} style={{ color: CHEVRON_COLORS[chevronIdx] }} />
+                  <ChevronDown
+                    size={11}
+                    style={{ color: CHEVRON_COLORS[chevronIdx] }}
+                  />
                 ) : (
-                  <ChevronLeft size={11} style={{ color: "var(--text-muted)" }} />
+                  <ChevronLeft
+                    size={11}
+                    style={{ color: "var(--text-muted)" }}
+                  />
                 )}
               </span>
             ) : (
-              <span style={{ width: 16, flexShrink: 0, display: "inline-block" }} />
+              <span
+                style={{ width: 16, flexShrink: 0, display: "inline-block" }}
+              />
             )}
-            <span className="text-xs font-medium" style={{ color: LEVEL_TEXT_COLORS[colorIdx] }}>
+            <span
+              className="text-xs font-medium"
+              style={{ color: LEVEL_TEXT_COLORS[colorIdx] }}
+            >
               {row.name}
             </span>
           </div>
         </td>
-  
+
         {/* Data cells — unchanged */}
         {COLUMNS.map((col) => {
-          const val       = (cachedRow as any)[col.key] as number | null;
+          const val = (cachedRow as any)[col.key] as number | null;
           const isReturns = col.key === "returns";
-          const isPctOnly = col.key === "discountPct" || col.key === "avgDiscRate";
-  
+          const isPctOnly =
+            col.key === "discountPct" || col.key === "avgDiscRate";
+
           if (isReturns) {
             return (
               <td key={col.key} style={analyticsTdBaseStyle("center")}>
                 <span
+                  title={fmtFull(val, col.key)}
                   style={{
-                    fontSize:   10,
+                    fontSize: 10,
                     fontWeight: 600,
-                    color: val !== null ? returnsTextColor(cachedRow.grossSales, val) : "var(--text-muted)",
+                    color:
+                      val !== null
+                        ? returnsTextColor(cachedRow.grossSales, val)
+                        : "var(--text-muted)",
+                    cursor: "default",
                   }}
                   dir="ltr"
                 >
@@ -430,51 +500,83 @@ export default function DrillDownTable({
               </td>
             );
           }
-  
+
           if (isPctOnly) {
             return (
               <td key={col.key} style={analyticsTdBaseStyle("center")}>
-                <span style={{ fontSize: 10, fontWeight: 600, color: "var(--text-secondary)" }} dir="ltr">
+                <span
+                  title={fmtFull(val, col.key)}
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 600,
+                    color: "var(--text-secondary)",
+                    cursor: "default",
+                  }}
+                  dir="ltr"
+                >
                   {fmt(val, col.key)}
                 </span>
               </td>
             );
           }
-  
+
           return (
-            <AnalyticsBarCell
+            <td
               key={col.key}
-              value={val ?? 0}
-              max={(maxByKey as any)[col.key] ?? maxGross}
-              color="#3b82f6"
-              text={fmt(val, col.key)}
-            />
+              title={fmtFull(val, col.key)}
+              style={{ cursor: "default" }}
+            >
+              <AnalyticsBarCell
+                value={val ?? 0}
+                max={(maxByKey as any)[col.key] ?? maxGross}
+                color="#3b82f6"
+                text={fmt(val, col.key)}
+              />
+            </td>
           );
         })}
       </tr>,
     );
-  
+
     // Error row
     if (isOpen && isChildError && !isChildLoading) {
       nodes.push(
-        <tr key={`${key}-error`} style={{ borderBottom: "1px solid var(--border-subtle)" }}>
-          <td colSpan={COLUMNS.length + 1} style={{ padding: "8px 16px", paddingRight: `${indent + 36}px` }}>
+        <tr
+          key={`${key}-error`}
+          style={{ borderBottom: "1px solid var(--border-subtle)" }}
+        >
+          <td
+            colSpan={COLUMNS.length + 1}
+            style={{ padding: "8px 16px", paddingRight: `${indent + 36}px` }}
+          >
             <div className="flex items-center gap-2">
-              <AlertCircle size={12} style={{ color: "var(--accent-red)", flexShrink: 0 }} />
-              <span style={{ fontSize: 11, color: "var(--text-muted)" }}>تعذر تحميل البيانات</span>
+              <AlertCircle
+                size={12}
+                style={{ color: "var(--accent-red)", flexShrink: 0 }}
+              />
+              <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                تعذر تحميل البيانات
+              </span>
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  retryChildren(key, cachedRow, activeBranchId, activeGroup1Id, activeGroup2Id, activeGroup3Id);
+                  retryChildren(
+                    key,
+                    cachedRow,
+                    activeBranchId,
+                    activeGroup1Id,
+                    activeGroup2Id,
+                    activeGroup3Id,
+                  );
                 }}
                 className="flex items-center gap-1 px-2 py-0.5 rounded transition-opacity hover:opacity-80"
                 style={{
-                  fontSize:   10,
+                  fontSize: 10,
                   background: "var(--bg-elevated)",
-                  border:     "1px solid var(--border-subtle)",
-                  color:      "var(--text-secondary)",
-                  cursor:     "pointer",
+                  border: "1px solid var(--border-subtle)",
+                  color: "var(--text-secondary)",
+                  cursor: "pointer",
                 }}
               >
                 <RefreshCw size={9} />
@@ -485,27 +587,47 @@ export default function DrillDownTable({
         </tr>,
       );
     }
-  
+
     // Loading row
     if (isOpen && isChildLoading) {
       nodes.push(
-        <tr key={`${key}-loading`} style={{ borderBottom: "1px solid var(--border-subtle)" }}>
-          <td colSpan={COLUMNS.length + 1} style={{ padding: 0, position: "relative", height: 80 }}>
+        <tr
+          key={`${key}-loading`}
+          style={{ borderBottom: "1px solid var(--border-subtle)" }}
+        >
+          <td
+            colSpan={COLUMNS.length + 1}
+            style={{ padding: 0, position: "relative", height: 80 }}
+          >
             <AnalyticsLoader variant="compact" title="جاري تحميل البيانات" />
           </td>
         </tr>,
       );
     }
-  
+
     // Recursively render children — pass all computed next ids
-    if (isOpen && !isChildLoading && !isChildError && cachedRow.children?.length) {
+    if (
+      isOpen &&
+      !isChildLoading &&
+      !isChildError &&
+      cachedRow.children?.length
+    ) {
       cachedRow.children.forEach((child, ci) => {
         nodes.push(
-          ...renderRow(child, level + 1, key, ci, nextBranchId, nextGroup1Id, nextGroup2Id, nextGroup3Id),
+          ...renderRow(
+            child,
+            level + 1,
+            key,
+            ci,
+            nextBranchId,
+            nextGroup1Id,
+            nextGroup2Id,
+            nextGroup3Id,
+          ),
         );
       });
     }
-  
+
     return nodes;
   };
 
@@ -631,9 +753,20 @@ export default function DrillDownTable({
         )}
 
         {/* Data rows */}
-        {!marketLoading && !marketError && tableData.flatMap((row, bi) =>
-  renderRow(row, 0, "root", bi, branch, undefined, undefined, undefined)
-)}
+        {!marketLoading &&
+          !marketError &&
+          tableData.flatMap((row, bi) =>
+            renderRow(
+              row,
+              0,
+              "root",
+              bi,
+              branch,
+              undefined,
+              undefined,
+              undefined,
+            ),
+          )}
 
         {/* Total row — only when data available */}
         {!marketLoading && !marketError && !isEmpty && (
@@ -666,7 +799,13 @@ export default function DrillDownTable({
               return (
                 <td key={col.key} style={analyticsTdBaseStyle("center")}>
                   <span
-                    style={{ fontSize: 10, fontWeight: 700, color: totalColor }}
+                    title={fmtFull(totalVal ?? null, col.key)}
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      color: totalColor,
+                      cursor: "default",
+                    }}
                     dir="ltr"
                   >
                     {fmt(totalVal ?? null, col.key)}
