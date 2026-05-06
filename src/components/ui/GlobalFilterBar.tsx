@@ -43,7 +43,6 @@ import {
   WORK_SHIFTS,
 } from "@/utils/filterUtils";
 
-// ── existing static-backed components (keep using for non-lookup filters) ──
 import { Dropdown } from "./Dropdown";
 import { MultiSelectDropdown } from "./MultiSelectDropdown";
 import { SearchDropdown } from "./SearchDropdown";
@@ -51,9 +50,6 @@ import { DateFilterDropdown } from "./DateFilterDropdown";
 import { ReportNameDialog } from "./ReportNameDialog";
 import { ReportCreatingPopup } from "./ReportCreatingPopup";
 
-// ── new infinite-scroll primitive ──────────────────────────────────────────
-
-// ── infinite hooks ──────────────────────────────────────────────────────────
 import {
   useInfiniteAgreements,
   useInfiniteBranches,
@@ -68,9 +64,6 @@ import {
 import { toCsv } from "@/api/utils";
 import { InfiniteDropdown } from "./Infinitedropdown";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Constants
-// ─────────────────────────────────────────────────────────────────────────────
 
 const DEFAULT_INSTANT_PERIOD       = "month";
 const DEFAULT_SALES_INSTANT_PERIOD = "month";
@@ -80,9 +73,6 @@ const BRANCH_HOLIDAY_OPTIONS       = AI_BASKET_HOLIDAY_OPTIONS;
 const DISCOUNTS                    = ["0%", "1-2%", "2-5%", "5-10%", "11-25%"];
 const PAYMENT_TYPES                = ["نقدي", "فيزا / بطاقة", "محفظة إلكترونية", "آجل / ذمم"];
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
 
 const normalizeSelections = (values: string[]) =>
   values.filter((v) => v && v !== "all");
@@ -100,9 +90,6 @@ const deriveDateFilters = (from: string, to: string) => {
   return { year: yearPart, quarter, month: monthPart, day: dayPart };
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// useSearchState — local debounced search state per dropdown
-// ─────────────────────────────────────────────────────────────────────────────
 
 function useSearchState(debounce = 300) {
   const [raw, setRaw]       = useState("");
@@ -118,9 +105,6 @@ function useSearchState(debounce = 300) {
   return { raw, applied, set };
 }
 
-// ═══════════════════════════════════════════════
-// GlobalFilterBar
-// ═══════════════════════════════════════════════
 
 export default function GlobalFilterBar() {
   const pathname         = usePathname();
@@ -133,7 +117,6 @@ export default function GlobalFilterBar() {
   const isProductsPage   = pathname === "/products";
   const isBasketLikePage = isAiBasketPage || isOperationsPage;
 
-  // ── store ──────────────────────────────────────────────────────────────────
   const {
     activeBranches, activePeriod,
     workShift, returnRateRange, employeeCities,
@@ -146,36 +129,30 @@ export default function GlobalFilterBar() {
     setActiveBranches, setActivePeriod, setFilter,
   } = useFilterStore();
 
-  // ── instant filter local state ─────────────────────────────────────────────
   const [activeRegions,          setActiveRegions]          = useState<string[]>([]);
   const [dateFrom,               setDateFrom]               = useState("");
   const [dateTo,                 setDateTo]                 = useState("");
 
-  // /sales
   const [salesG1,      setSalesG1]      = useState<string[]>([]);
   const [salesG2,      setSalesG2]      = useState<string[]>([]);
   const [salesG3,      setSalesG3]      = useState<string[]>([]);
   const [salesCompany, setSalesCompany] = useState<string[]>([]);
   const [salesProduct, setSalesProduct] = useState<string[]>([]);
 
-  // /branches
   const [branchesG1,      setBranchesG1]      = useState<string[]>([]);
   const [branchesG2,      setBranchesG2]      = useState<string[]>([]);
   const [branchesG3,      setBranchesG3]      = useState<string[]>([]);
   const [branchesProduct, setBranchesProduct] = useState("");
 
-  // /ai-basket
   const [aiBasketG1,       setAiBasketG1]       = useState<string[]>([]);
   const [aiBasketG2,       setAiBasketG2]       = useState<string[]>([]);
   const [aiBasketReportG3, setAiBasketReportG3] = useState<string[]>([]);
 
-  // /customers report
   const [customersG1,      setCustomersG1]      = useState<string[]>([]);
   const [customersG2,      setCustomersG2]      = useState<string[]>([]);
   const [customersG3,      setCustomersG3]      = useState<string[]>([]);
   const [customersProduct, setCustomersProduct] = useState("");
 
-  // misc report
   const [distributor,  setDistributor]  = useState("");
   const [category,     setCategory]     = useState("");
   const [product,      setProduct]      = useState("");
@@ -187,13 +164,11 @@ export default function GlobalFilterBar() {
   const [prodG3,       setProdG3]       = useState("");
   const [prodName,     setProdName]     = useState("");
 
-  // dialog
   const [showNameDialog, setShowNameDialog] = useState(false);
   const [showPopup,      setShowPopup]      = useState(false);
   const [reportName,     setReportName]     = useState("");
   const [showReportsRow, setShowReportsRow] = useState(true);
 
-  // ── per-dropdown search states ─────────────────────────────────────────────
   const regionSearch    = useSearchState();
   const branchSearch    = useSearchState();
   const companySearch   = useSearchState();
@@ -203,12 +178,8 @@ export default function GlobalFilterBar() {
   const productSearch   = useSearchState();
   const agreementSearch = useSearchState();
 
-  // ─── API: regions ──────────────────────────────────────────────────────────
   const regionsQuery = useInfiniteRegions({ search: regionSearch.applied });
 
-  // ─── API: branches (region-scoped) ────────────────────────────────────────
-  //  The API accepts `region` as the region *name*.
-  //  We need the selected region names.  We derive them from the flat results.
   const allRegionPages = regionsQuery.data?.pages ?? [];
   const allRegions     = allRegionPages.flatMap((p) => p.results);
   const selectedRegionNames = activeRegions
@@ -220,15 +191,10 @@ export default function GlobalFilterBar() {
     { search: branchSearch.applied, region: selectedRegionNames || undefined },
   );
 
-  // ─── API: companies ────────────────────────────────────────────────────────
   const companiesQuery = useInfiniteCompanies({ search: companySearch.applied });
 
-  // ─── API: group1 ───────────────────────────────────────────────────────────
   const group1Query = useInfiniteGroup1({ search: g1Search.applied });
 
-  // ─── API: group2 (cascades from selected g1) ───────────────────────────────
-  // The API accepts group1 as a single PK — multi-select means we fetch without
-  // the constraint and let the user filter by name instead.
   const selectedG1Id =
     salesG1.length === 1 && salesG1[0] !== "all"
       ? Number(salesG1[0])
@@ -245,7 +211,6 @@ export default function GlobalFilterBar() {
     group1: selectedG1Id,
   });
 
-  // ─── API: group3 (cascades from selected g2) ───────────────────────────────
   const selectedG2Id =
     salesG2.length === 1 && salesG2[0] !== "all"
       ? Number(salesG2[0])
@@ -262,7 +227,6 @@ export default function GlobalFilterBar() {
     group2: selectedG2Id,
   });
 
-  // ─── API: products (cascades from g1/g2/g3 + agreements) ──────────────────
   const productsQuery = useInfiniteProducts({
     search: productSearch.applied,
     group1_ids: toCsv(
@@ -285,12 +249,10 @@ export default function GlobalFilterBar() {
     ),
   });
 
-  // ─── API: agreements ───────────────────────────────────────────────────────
   const agreementsQuery = useInfiniteAgreements({
     search: agreementSearch.applied,
   });
 
-  // ── sync sales filters → filterStore ──────────────────────────────────────
   useEffect(() => {
     if (!isSalesPage) {
       setFilter("region", []);
@@ -305,7 +267,6 @@ export default function GlobalFilterBar() {
     setFilter("product", normalizeSelections(salesG3));
   }, [isSalesPage, activeRegions, salesG1, salesG2, salesG3, setFilter]);
 
-  // ── sync date → filterStore ────────────────────────────────────────────────
   useEffect(() => {
     if (!isSalesPage) return;
     const { year, quarter, month, day } = deriveDateFilters(dateFrom, dateTo);
@@ -315,7 +276,6 @@ export default function GlobalFilterBar() {
     setFilter("day", day);
   }, [isSalesPage, dateFrom, dateTo, setFilter]);
 
-  // ── initialise period per page ─────────────────────────────────────────────
   useEffect(() => {
     if (isSalesPage) {
       setActivePeriod(DEFAULT_SALES_INSTANT_PERIOD);
@@ -333,7 +293,6 @@ export default function GlobalFilterBar() {
     if (SALES_QUICK_PERIOD_VALUES.has(ap)) setActivePeriod(DEFAULT_INSTANT_PERIOD);
   }, [isSalesPage, isBranchesPage, isEmployeesPage, isBasketLikePage, setActivePeriod]);
 
-  // ── scroll-hide reports row ────────────────────────────────────────────────
   useEffect(() => {
     const el = document.getElementById("dashboard-scroll-root");
     if (!el) return;
@@ -348,7 +307,6 @@ export default function GlobalFilterBar() {
 
   if (pathname === "/reports") return null;
 
-  // ── dirty / hasReportFilter ────────────────────────────────────────────────
   const salesInstantDirty =
     isSalesPage &&
     (salesG1.length > 0 || salesG2.length > 0 || salesG3.length > 0 ||
@@ -443,7 +401,6 @@ export default function GlobalFilterBar() {
     setProdG1(""); setProdG2(""); setProdG3(""); setProdName("");
   }, [pathname, setActiveBranches, setActivePeriod, setFilter]);
 
-  // ── shared accent shortcuts ────────────────────────────────────────────────
   const ACCENT_REGION   = "var(--accent-cyan)";
   const ACCENT_BRANCH   = "var(--accent-green)";
   const ACCENT_COMPANY  = "#6366f1";
@@ -453,9 +410,7 @@ export default function GlobalFilterBar() {
   const ACCENT_PRODUCT  = "#00d4ff";
   const ACCENT_AGREEMENT= "#c084fc";
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // RENDER
-  // ─────────────────────────────────────────────────────────────────────────
+
   return (
     <>
       <div
@@ -472,7 +427,6 @@ export default function GlobalFilterBar() {
           ⚡ لحظي
         </span>
 
-        {/* ── Date always first ─────────────────────────────────────────── */}
         <DateFilterDropdown
           activePeriod={activePeriod}
           setActivePeriod={setActivePeriod}
@@ -483,7 +437,6 @@ export default function GlobalFilterBar() {
           rangeGranularity="month"
         />
 
-        {/* ── Region (all pages) — infinite ─────────────────────────────── */}
         <InfiniteDropdown
           mode="multi"
           icon={MapPin}
@@ -497,7 +450,6 @@ export default function GlobalFilterBar() {
           searchValue={regionSearch.raw}
         />
 
-        {/* ── Branches (all pages) — infinite, cascades from region ─────── */}
         <InfiniteDropdown
           mode="multi"
           icon={Building2}
@@ -511,9 +463,7 @@ export default function GlobalFilterBar() {
           searchValue={branchSearch.raw}
         />
 
-        {/* ═══════════════════════ PAGE-SPECIFIC ══════════════════════════ */}
 
-        {/* ── /branches ───────────────────────────────────────────────────── */}
         {isBranchesPage && (
           <>
             <MultiSelectDropdown
@@ -604,7 +554,6 @@ export default function GlobalFilterBar() {
           </>
         )}
 
-        {/* ── /ai-basket & /operations ─────────────────────────────────────── */}
         {isBasketLikePage && (
           <>
             <MultiSelectDropdown
@@ -659,7 +608,6 @@ export default function GlobalFilterBar() {
           </>
         )}
 
-        {/* ── /customers ──────────────────────────────────────────────────── */}
         {isCustomersPage && (
           <>
             <MultiSelectDropdown
@@ -706,7 +654,6 @@ export default function GlobalFilterBar() {
           </>
         )}
 
-        {/* ── /products ───────────────────────────────────────────────────── */}
         {isProductsPage && (
           <>
             <InfiniteDropdown
@@ -740,7 +687,6 @@ export default function GlobalFilterBar() {
           </>
         )}
 
-        {/* ── /sales ──────────────────────────────────────────────────────── */}
         {isSalesPage && (
           <>
             <InfiniteDropdown
@@ -781,9 +727,7 @@ export default function GlobalFilterBar() {
           </>
         )}
 
-        {/* ═══════════════════ REPORTS ROW (non-instant) ══════════════════ */}
 
-        {/* Employees — report */}
         {showReportsRow && isEmployeesPage && (
           <>
             <Divider />
@@ -952,10 +896,8 @@ export default function GlobalFilterBar() {
           </>
         )}
 
-        {/* ── Spacer ──────────────────────────────────────────────────────── */}
         <div style={{ flex: 1 }} />
 
-        {/* ── Create Report button ─────────────────────────────────────────── */}
         <AnimatePresence>
           {hasReportFilter && showReportsRow && (
             <motion.button
@@ -972,7 +914,6 @@ export default function GlobalFilterBar() {
           )}
         </AnimatePresence>
 
-        {/* ── Reset button ─────────────────────────────────────────────────── */}
         {(isAnyInstantChanged || hasReportFilter) && (
           <button
             onClick={resetAll}
@@ -993,9 +934,6 @@ export default function GlobalFilterBar() {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Small layout atoms
-// ─────────────────────────────────────────────────────────────────────────────
 
 function Divider() {
   return <div style={{ width: 1, height: 20, background: "var(--border-subtle)", marginInline: 4 }} />;

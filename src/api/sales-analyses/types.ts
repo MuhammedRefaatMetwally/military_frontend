@@ -60,18 +60,65 @@ export interface MonthlyProfitParams extends SalesAnalysisBaseFilters {
 
 export interface DetailedTimeSalesParams extends SalesAnalysisBaseFilters {}
 
-export interface DetailedSalesBreakdownParams extends SalesAnalysisBaseFilters {
+export interface DetailedSalesBreakdownParams {
   at: BreakdownAt;
+  // base fields (copied from SalesAnalysisBaseFilters)
+  years?: number[];
+  branchIds?: string;        // ← single string, not array
+  regionIds?: string[];
+  group1Ids?: string[];
+  group2Ids?: string[];
+  group3Ids?: string[];
+  agreementId?: string;
 }
 
+
 export interface TransactionsWaterfallParams {
-  granularity?: WaterfallGranularity;
+  granularity: WaterfallGranularity;
+  /** Option A — explicit list */
   years?: number[];
+  /** Option B — range (both required together) */
   yearFrom?: number;
   yearTo?: number;
   branchIds?: string[];
   regionIds?: string[];
 }
+export interface WaterfallYearMarket {
+  // extend when the API returns real market fields
+  [key: string]: unknown;
+}
+export interface WaterfallYearEntry {
+  year: number;
+  total: number;
+  markets: WaterfallYearMarket[];
+}
+
+export interface WaterfallYearResponse {
+  data: WaterfallYearEntry[];
+}
+
+export interface WaterfallQuarterPeriod {
+  [key: string]: unknown;
+}
+
+export interface WaterfallQuarterResponse {
+  granularity: "quarter";
+  years: number[];
+  branch_ids: number[];
+  metric: string;
+  max_value: number;
+  periods: WaterfallQuarterPeriod[];
+}
+
+export type TransactionsWaterfallResponse = | WaterfallYearResponse| WaterfallQuarterResponse;
+
+export const isWaterfallYearResponse = (
+  r: TransactionsWaterfallResponse,
+): r is WaterfallYearResponse => "data" in r;
+
+export const isWaterfallQuarterResponse = (
+  r: TransactionsWaterfallResponse,
+): r is WaterfallQuarterResponse => "granularity" in r;
 
 export interface SalesAnalysisRecord {
   [key: string]: string | number | boolean | null;
@@ -146,7 +193,7 @@ export interface DetailedTimeSalesResponse {
 export interface SalesBreakdownFilters {
   at: BreakdownAt;
   years?: number[];
-  regionIds?: string[];
+  regionIds?: string;
   branchIds?: string[];
   group1Ids?: string[];
   group2Ids?: string[];
