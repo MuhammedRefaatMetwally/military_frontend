@@ -172,7 +172,17 @@
   scrollbar-color: var(--border-default) transparent;
 }
 
-*::-webkit-scrollbar {
+.hide-scrollbar {
+  -ms-overflow-style: none;  /* IE */
+  scrollbar-width: none;     /* Firefox */
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  width: 0 !important;
+  display: none !important;
+}
+
+.has-scrollbar::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }

@@ -38,6 +38,8 @@ interface ChartCardProps {
   scrollViewportDir?: "ltr" | "rtl";
   delay?: number;
   aiPowered?: boolean;
+  // ── NEW: forward arbitrary ECharts event handlers ──────────────────────────
+  onEvents?: Record<string, (params: unknown) => void>;
 }
 
 function buildMergedTooltip({
@@ -422,6 +424,7 @@ function ChartCard({
   scrollViewportDir,
   delay = 0,
   aiPowered = false,
+  onEvents,
 }: ChartCardProps) {
   const mode = useThemeStore((s) => s.mode);
   const isDark = mode === "dark";
@@ -493,6 +496,12 @@ function ChartCard({
     return () => window.removeEventListener("resize", onWinResize);
   }, [isFullscreen, resizeFullscreenChart]);
 
+  // ── chart element factory ─────────────────────────────────────────────────
+  // onEvents is passed directly to ReactEChartsCore which wires them onto the
+  // underlying ECharts instance via echartsInstance.on(eventName, handler).
+  // This is the only correct way to receive ECharts native events (click,
+  // mouseover, etc.) — attaching a DOM onClick to the wrapper div does NOT
+  // work because ECharts renders to <canvas> and stops DOM event propagation.
   const chartEl = useCallback(
     (extraHeight?: string, forFullscreen?: boolean) => (
       <ReactEChartsCore
@@ -502,9 +511,12 @@ function ChartCard({
         style={{ height: extraHeight || "100%", width: "100%" }}
         opts={{ renderer: "canvas" }}
         notMerge={true}
+        onEvents={onEvents}
       />
     ),
-    [mergedOption],
+    // onEvents intentionally included — if the caller passes a new handler map
+    // (e.g. after drill-level changes) the chart instance must re-bind.
+    [mergedOption, onEvents],
   );
 
   const inlineChartNode = useMemo(

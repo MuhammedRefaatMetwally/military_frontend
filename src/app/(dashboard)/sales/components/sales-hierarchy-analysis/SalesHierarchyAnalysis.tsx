@@ -409,50 +409,83 @@ export default function SalesHierarchyAnalysis() {
       </div>
 
       <AnimatePresence>
-        {path.length > 0 && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="flex items-center gap-2 px-5 py-2 border-b flex-wrap"
-            style={{ borderColor: "var(--border-subtle)" }}
-          >
-            {path.map((lvl, i) => (
-              <span
-                key={lvl.node.id}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium"
-                style={{
-                  background: "rgba(37,99,235,0.12)",
-                  border: "1px solid rgba(37,99,235,0.3)",
-                }}
-              >
-                <span style={{ color: "var(--text-muted)", fontSize: "10px" }}>
-                  {HIERARCHY_TITLES[lvl.at]}
-                </span>
-                <span style={{ color: "var(--accent-blue)" }}>
-                  {lvl.node.label}
-                </span>
-                <button
-                  onClick={() => handleDeselect(i)}
-                  className="opacity-60 hover:opacity-100 transition-opacity"
-                >
-                  <X size={10} />
-                </button>
+  {path.length > 0 && (
+    <motion.div
+      initial={{ height: 0, opacity: 0 }}
+      animate={{ height: "auto", opacity: 1 }}
+      exit={{ height: 0, opacity: 0 }}
+      className="border-b overflow-hidden"
+      style={{ borderColor: "var(--border-subtle)" }}
+    >
+      <div className="px-5 py-2.5 flex items-center gap-1.5 flex-wrap" dir="rtl">
+
+        {/* Static root crumb */}
+        <button
+          onClick={() => setPath([])}
+          className="text-[11px] transition-opacity hover:opacity-70"
+          style={{ color: "var(--text-muted)" }}
+        >
+          الكل
+        </button>
+
+        {path.map((lvl, i) => {
+          const isLast = i === path.length - 1;
+          return (
+            <React.Fragment key={lvl.node.id}>
+              {/* Chevron separator */}
+              <span style={{ color: "var(--text-muted)", fontSize: 10, opacity: 0.4 }}>
+                ‹
               </span>
-            ))}
-            <button
-              onClick={() => setPath([])}
-              className="text-[10px] underline"
-              style={{ color: "var(--text-muted)" }}
-            >
-              مسح الكل
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              {isLast ? (
+                /* Active crumb — pill style */
+                <span
+                  className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold"
+                  style={{
+                    background: "rgba(37,99,235,0.12)",
+                    border: "1px solid rgba(37,99,235,0.25)",
+                    color: "var(--accent-blue)",
+                  }}
+                >
+                  <span style={{ color: "var(--text-muted)", fontSize: "9px", fontWeight: 400 }}>
+                    {HIERARCHY_TITLES[lvl.at]}
+                  </span>
+                  {lvl.node.label}
+                  <button
+                    onClick={() => handleDeselect(i)}
+                    className="opacity-50 hover:opacity-100 transition-opacity"
+                    style={{ lineHeight: 1 }}
+                  >
+                    <X size={9} />
+                  </button>
+                </span>
+              ) : (
+                /* Ancestor crumb — plain clickable text */
+                <button
+                  onClick={() => handleDeselect(i + 1)}
+                  className="text-[11px] transition-opacity hover:opacity-70 max-w-[100px] truncate"
+                  style={{ color: "var(--text-muted)" }}
+                  title={lvl.node.label}
+                >
+                  {lvl.node.label}
+                </button>
+              )}
+            </React.Fragment>
+          );
+        })}
+      </div>
+    </motion.div>
+  )}
+</AnimatePresence>
 
       {/* Columns */}
-      <div ref={scrollRef} className="overflow-x-auto p-5">
+      <div
+        ref={scrollRef}
+        className="overflow-x-auto p-5"
+        style={{
+          scrollbarWidth: "none",
+          msOverflowStyle: "none",
+        }}
+      >
         <div className="flex w-max me-auto gap-2 items-stretch" dir="ltr">
           {visibleColumns.map((at, colIdx) => {
             const p = getColParams(colIdx);

@@ -4,7 +4,7 @@ import { useResolvedAnalyticsPalette } from "@/hooks/useResolvedAnalyticsPalette
 import { useNetSalesProfitChart } from "@/hooks/useSalesAnalyses";
 import { useFilterStore } from "@/store/filterStore";
 import dynamic from "next/dynamic";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
 import { AnalyticsLoader } from "@/components/ui/analytics-loader";
 
@@ -21,6 +21,15 @@ const normalizeSelections = (values: string[]) =>
 const toInt = (s: string): number | undefined => {
   const n = Number.parseInt(s, 10);
   return Number.isNaN(n) || s === "" ? undefined : n;
+};
+
+// ─── Quarter → months mapping ────────────────────────────────────────────────
+
+const QUARTER_MONTHS: Record<number, number[]> = {
+  1: [1, 2, 3],
+  2: [4, 5, 6],
+  3: [7, 8, 9],
+  4: [10, 11, 12],
 };
 
 // ─── y-axis definitions ──────────────────────────────────────────────────────
@@ -68,15 +77,17 @@ const EMPTY_OPTION = {
   series: [],
 };
 
+// ─── types ───────────────────────────────────────────────────────────────────
 
 type LevelType = "year" | "quarter" | "month";
 type IndicatorType = "both" | "sales" | "profit";
 type QuarterType = 1 | 2 | 3 | 4;
 
+// ─── constants ───────────────────────────────────────────────────────────────
 
 const ARABIC_MONTHS_SHORT = [
-  "يناير","فبراير","مارس","إبريل","مايو","يونيو",
-  "يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر",
+  "يناير", "فبراير", "مارس", "إبريل", "مايو", "يونيو",
+  "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر",
 ];
 
 const QUARTER_LABELS: Record<QuarterType, string> = {
@@ -86,18 +97,92 @@ const QUARTER_LABELS: Record<QuarterType, string> = {
   4: "الربع الرابع",
 };
 
+const QUARTER_SHORT: Record<QuarterType, string> = {
+  1: "Q1", 2: "Q2", 3: "Q3", 4: "Q4",
+};
+
 const indicatorButtons: { value: IndicatorType; label: string }[] = [
   { value: "sales",  label: "المبيعات" },
-  { value: "profit", label: "الأرباح"  },
-  { value: "both",   label: "كلاهما"   },
+  { value: "profit", label: "الأرباح" },
+  { value: "both",   label: "كلاهما" },
 ];
 
 const levelButtons: { value: LevelType; label: string }[] = [
-  { value: "year",    label: "سنوي"       },
-  { value: "quarter", label: "ربع سنوي"   },
-  { value: "month",   label: "شهري"       },
+  { value: "year",    label: "سنوي" },
+  { value: "quarter", label: "ربع سنوي" },
+  { value: "month",   label: "شهري" },
 ];
 
+// ─── Breadcrumb ──────────────────────────────────────────────────────────────
+
+interface BreadcrumbProps {
+  level: LevelType;
+  drillYear: number | null;
+  drillQuarter: QuarterType | null;
+  onNavigate: (level: LevelType) => void;
+  accentColor: string;
+}
+
+function Breadcrumb({ level, drillYear, drillQuarter, onNavigate, accentColor }: BreadcrumbProps) {
+  // Only show when drilled down
+  if (level === "year") return null;
+
+  const crumbs: { label: string; level: LevelType }[] = [
+    { label: "سنوي", level: "year" },
+  ];
+
+  if (drillYear !== null) {
+    crumbs.push({ label: String(drillYear), level: "quarter" });
+  }
+
+  if (level === "month" && drillQuarter !== null) {
+    crumbs.push({ label: QUARTER_SHORT[drillQuarter], level: "month" });
+  }
+
+  return (
+    <div
+      className="flex items-center gap-1"
+      dir="ltr"
+      style={{
+        padding: "3px 8px",
+        borderRadius: 6,
+        background: "var(--bg-elevated)",
+        border: "1px solid var(--border-subtle)",
+        fontSize: 10,
+      }}
+    >
+      {crumbs.map((crumb, idx) => {
+        const isLast = idx === crumbs.length - 1;
+        return (
+          <span key={crumb.level} className="flex items-center gap-1">
+            {idx > 0 && (
+              <span style={{ color: "var(--text-muted)", fontSize: 9, opacity: 0.6 }}>›</span>
+            )}
+            <button
+              type="button"
+              onClick={() => !isLast && onNavigate(crumb.level)}
+              style={{
+                color: isLast ? accentColor : "var(--text-muted)",
+                fontWeight: isLast ? 600 : 400,
+                cursor: isLast ? "default" : "pointer",
+                background: "none",
+                border: "none",
+                padding: 0,
+                fontSize: 10,
+                transition: "color .15s",
+              }}
+              className={!isLast ? "hover:opacity-80" : ""}
+            >
+              {crumb.label}
+            </button>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── SubPeriodRow ─────────────────────────────────────────────────────────────
 
 interface SubPeriodRowProps {
   level: LevelType;
@@ -107,6 +192,8 @@ interface SubPeriodRowProps {
   toggleMonth: (m: number) => void;
   accentColor: string;
   disabled: boolean;
+  drillYear: number | null;   // hide sub-period row when drill is active (drill manages period)
+  drillQuarter: QuarterType | null;
 }
 
 function SubPeriodRow({
@@ -117,7 +204,10 @@ function SubPeriodRow({
   toggleMonth,
   accentColor,
   disabled,
+  drillYear,
+  drillQuarter,
 }: SubPeriodRowProps) {
+
   if (level === "year") return null;
 
   const getStyle = (active: boolean) => ({
@@ -174,6 +264,7 @@ function SubPeriodRow({
   );
 }
 
+// ─── FetchingDots ─────────────────────────────────────────────────────────────
 
 function FetchingDots({ color }: { color: string }) {
   return (
@@ -187,12 +278,21 @@ function FetchingDots({ color }: { color: string }) {
   );
 }
 
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 const NetProfitAndSalesByDate = () => {
-  const [seriesMode, setSeriesMode]         = useState<IndicatorType>("both");
-  const [level, setLevel]                   = useState<LevelType>("year");
+  const [seriesMode, setSeriesMode] = useState<IndicatorType>("both");
+  const [level, setLevel] = useState<LevelType>("year");
+
+  // Manual filter-button selections (used when NOT in drill mode)
   const [selectedQuarters, setSelectedQuarters] = useState<QuarterType[]>([1]);
-  const [selectedMonths, setSelectedMonths]     = useState<number[]>([1]);
+  const [selectedMonths, setSelectedMonths] = useState<number[]>([1]);
+
+  // Drill state — null means no active drill at that depth
+  const [drillYear, setDrillYear] = useState<number | null>(null);
+  const [drillQuarter, setDrillQuarter] = useState<QuarterType | null>(null);
+
+  // ── toggle helpers (manual filter buttons) ────────────────────────────────
 
   const toggleQuarter = (quarter: QuarterType) =>
     setSelectedQuarters((prev) => {
@@ -206,11 +306,55 @@ const NetProfitAndSalesByDate = () => {
       return [...prev, month].sort((a, b) => a - b);
     });
 
+  // ── level button handler — resets drill state ─────────────────────────────
+
   const handleLevelChange = (newLevel: LevelType) => {
     setLevel(newLevel);
-    if (newLevel === "quarter") setSelectedQuarters([1]);
+    setDrillYear(null);
+    setDrillQuarter(null);
+    if (newLevel === "quarter") setSelectedQuarters([1, 2, 3, 4]); // show all quarters by default
     if (newLevel === "month")   setSelectedMonths([1]);
   };
+
+  // ── breadcrumb navigation ─────────────────────────────────────────────────
+
+  const handleBreadcrumbNavigate = useCallback((targetLevel: LevelType) => {
+    if (targetLevel === "year") {
+      setLevel("year");
+      setDrillYear(null);
+      setDrillQuarter(null);
+    } else if (targetLevel === "quarter") {
+      setLevel("quarter");
+      setDrillQuarter(null);
+      // drillYear stays — we're still scoped to that year
+    }
+  }, []);
+
+  // ── chart click handler ───────────────────────────────────────────────────
+
+  const handleChartClick = useCallback(
+    (params: { dataIndex: number; name: string }) => {
+      if (level === "year") {
+        const clickedYear = toInt(params.name);
+        if (clickedYear === undefined) return;
+        setDrillYear(clickedYear);
+        setDrillQuarter(null);
+        setSelectedQuarters([1, 2, 3, 4]); // ← show all 4 quarters selected
+        setLevel("quarter");
+      } else if (level === "quarter") {
+        const match = params.name.match(/^Q(\d)$/);
+        if (!match) return;
+        const q = Number.parseInt(match[1], 10) as QuarterType;
+        setDrillQuarter(q);
+        const monthsForQuarter = QUARTER_MONTHS[q]; // ← pre-select that quarter's months
+        setSelectedMonths(monthsForQuarter);
+        setLevel("month");
+      }
+    },
+    [level],
+  );
+
+  // ── palette & global filters ──────────────────────────────────────────────
 
   const palette = useResolvedAnalyticsPalette();
 
@@ -223,20 +367,37 @@ const NetProfitAndSalesByDate = () => {
   const product        = useFilterStore((s) => s.product);
   const agreement      = useFilterStore((s) => s.agreement);
 
-  const yearNum  = toInt(storeYear);
-  const monthNum = toInt(storeMonth);
+  const storeYearNum = toInt(storeYear);
+  const monthNum     = toInt(storeMonth);
 
-  const years = useMemo(() => (yearNum !== undefined ? [yearNum] : []), [yearNum]);
+  // ── years array: if drilled, lock to drillYear ────────────────────────────
+
+  const years = useMemo(() => {
+    if (drillYear !== null) return [drillYear];
+    return storeYearNum !== undefined ? [storeYearNum] : [];
+  }, [drillYear, storeYearNum]);
+
+  // ── period array ──────────────────────────────────────────────────────────
 
   const period = useMemo<number[] | undefined>(() => {
-    if (level === "quarter") return selectedQuarters;
+    if (level === "year") return undefined;
+
+    if (level === "quarter") {
+      // If drill is active, show all 4 quarters; otherwise use manual selection
+      return drillYear !== null ? [1, 2, 3, 4] : selectedQuarters;
+    }
+
     if (level === "month") {
+      // If drilled from a quarter, show only that quarter's 3 months
+      if (drillQuarter !== null) return QUARTER_MONTHS[drillQuarter];
+      // Manual month selection fallback
       if (selectedMonths.length === 1 && selectedMonths[0] === 1 && monthNum !== undefined)
         return [monthNum];
       return selectedMonths;
     }
+
     return undefined;
-  }, [level, selectedQuarters, selectedMonths, monthNum]);
+  }, [level, drillYear, drillQuarter, selectedQuarters, selectedMonths, monthNum]);
 
   const agreementId = useMemo(
     () => normalizeSelections(agreement)[0] ?? undefined,
@@ -275,8 +436,10 @@ const NetProfitAndSalesByDate = () => {
 
   const chartData = data?.data ?? [];
 
+  // ── label builder ─────────────────────────────────────────────────────────
+
   const getLabel = (point: (typeof chartData)[0]): string => {
-    if (level === "month"   && point.month   != null) return ARABIC_MONTHS_SHORT[point.month - 1]   ?? String(point.month);
+    if (level === "month"   && point.month   != null) return ARABIC_MONTHS_SHORT[point.month - 1] ?? String(point.month);
     if (level === "quarter" && point.quarter != null) return `Q${point.quarter}`;
     return String(point.year);
   };
@@ -292,17 +455,43 @@ const NetProfitAndSalesByDate = () => {
     };
   }, [chartData, level]);
 
-  const xAxis = { type: "category" as const, data: labels };
+  // ── drill cursor hint on bars ─────────────────────────────────────────────
+
+  // Add a subtle visual cue that year/quarter bars are clickable
+  const isDrillable = level === "year" || level === "quarter";
+
+  const xAxis = {
+    type: "category" as const,
+    data: labels,
+    // Show pointer cursor on drillable levels via triggerEvent
+    triggerEvent: isDrillable,
+    axisLabel: {
+      color: isDrillable ? palette.primaryGreen : "#94a3b8",
+      fontSize: 11,
+    },
+  };
 
   const salesBarSeries = {
     name: "المبيعات",
     type: "bar" as const,
     data: salesValues.map((v, i) => [i, v]),
     barWidth: 40,
+    cursor: isDrillable ? "pointer" : "default",
     itemStyle: {
       color: palette.primaryGreen,
       borderRadius: [4, 4, 0, 0] as [number, number, number, number],
     },
+    // Subtle hover emphasis to signal drillability
+    emphasis: isDrillable
+      ? {
+          itemStyle: {
+            color: palette.primaryGreen,
+            opacity: 0.75,
+            shadowBlur: 8,
+            shadowColor: `${palette.primaryGreen}50`,
+          },
+        }
+      : undefined,
     yAxisIndex: 0,
   };
 
@@ -311,6 +500,7 @@ const NetProfitAndSalesByDate = () => {
     type: "line" as const,
     data: profitValues.map((v, i) => [i, v]),
     yAxisIndex: seriesMode === "both" ? 1 : 0,
+    cursor: isDrillable ? "pointer" : "default",
     lineStyle: { color: palette.primaryCyan, width: 2.5 },
     itemStyle: { color: palette.primaryCyan, borderWidth: 2 },
     symbol: "circle" as const,
@@ -331,7 +521,6 @@ const NetProfitAndSalesByDate = () => {
   const isEmpty = !isLoadingOrFetching && !isError && enabled && chartData.length === 0;
 
   const option = useMemo(() => {
-    // Always clear chart when not ready — no stale data flash
     if (isLoadingOrFetching || isError || isEmpty || !enabled) return EMPTY_OPTION;
 
     if (seriesMode === "sales")
@@ -357,17 +546,22 @@ const NetProfitAndSalesByDate = () => {
       legend: legend(["المبيعات", "الأرباح"]),
       grid: drillGrid,
     };
-  }, [labels, salesValues, profitValues, seriesMode, palette, isLoadingOrFetching, isError, isEmpty, enabled]);
+  }, [labels, salesValues, profitValues, seriesMode, palette, isLoadingOrFetching, isError, isEmpty, enabled, isDrillable]);
+
+  // ── subtitle ──────────────────────────────────────────────────────────────
 
   const subtitle = !enabled
-  ? "يرجى تحديد سنة صالحة من الفلتر"
-  : isError
-    ? "تعذر تحميل البيانات"       
-    : isEmpty
-      ? "لا توجد بيانات للفترة المحددة"
-      : "البيانات مرتبطة بالفلاتر العامة";
+    ? "يرجى تحديد سنة صالحة من الفلتر"
+    : isError
+      ? "تعذر تحميل البيانات"
+      : isEmpty
+        ? "لا توجد بيانات للفترة المحددة"
+        : isDrillable
+          ? "انقر على البيانات للتعمق في التفاصيل"
+          : "البيانات مرتبطة بالفلاتر العامة";
 
-  // ── button style factory ───────────────────────────────────────────────────
+  // ── button style factory ──────────────────────────────────────────────────
+
   const btnStyle = (isActive: boolean, accent: string, loading: boolean) => ({
     background: isActive ? `${accent}25` : "var(--bg-elevated)",
     color:      isActive ? accent : "var(--text-muted)",
@@ -377,34 +571,55 @@ const NetProfitAndSalesByDate = () => {
     transition: "opacity 0.2s, background 0.15s",
   });
 
-  // ── render ─────────────────────────────────────────────────────────────────
+  // ── render ────────────────────────────────────────────────────────────────
+
   return (
     <div className="relative">
       {/* Loading Overlay */}
       {isLoadingOrFetching && (
-        <div 
+        <div
           className="absolute inset-0 z-20 flex items-center justify-center rounded-xl"
           style={{
             background: "rgba(0, 0, 0, 0.4)",
             backdropFilter: "blur(4px)",
           }}
         >
-          <AnalyticsLoader 
-            variant="compact" 
-            title="جاري تحميل البيانات" 
-          />
+          <AnalyticsLoader variant="compact" title="جاري تحميل البيانات" />
         </div>
       )}
-      
+
       <ChartCard
         title="صافي الأرباح والمبيعات حسب التاريخ"
         subtitle={subtitle}
         titleFlag="green"
         titleFlagNumber={1}
+        onEvents={{
+          click: (params: unknown) => {
+            const p = params as { dataIndex: number; name: string };
+            if (typeof p?.name === "string" && typeof p?.dataIndex === "number") {
+              handleChartClick(p);
+            }
+          },
+        }}
         headerExtra={
           <div className="flex flex-col items-end gap-2" dir="rtl">
-            {/* Row 1: indicator | level toggles */}
+            {/* Row 1: breadcrumb (when drilled) + indicator + level toggles */}
             <div className="flex items-center gap-2 flex-wrap justify-end">
+
+              {/* Breadcrumb — only visible when drilled */}
+              <Breadcrumb
+                level={level}
+                drillYear={drillYear}
+                drillQuarter={drillQuarter}
+                onNavigate={handleBreadcrumbNavigate}
+                accentColor={palette.primaryGreen}
+              />
+
+              {/* Separator after breadcrumb */}
+              {level !== "year" && (
+                <span style={{ width: 1, height: 18, background: "var(--border-subtle)", display: "inline-block", flexShrink: 0 }} />
+              )}
+
               {/* المؤشر */}
               <div className="flex items-center gap-1">
                 <span className="text-[9px] shrink-0" style={{ color: "var(--text-muted)" }}>
@@ -446,12 +661,12 @@ const NetProfitAndSalesByDate = () => {
                 ))}
               </div>
 
-              {/* Live fetching indicator — inline, doesn't shift layout */}
+              {/* Live fetching indicator */}
               {isLoadingOrFetching && (
                 <FetchingDots color={palette.primaryGreen} />
               )}
 
-              {/* Error retry button — inline with controls */}
+              {/* Error retry button */}
               {isError && !isLoadingOrFetching && (
                 <button
                   type="button"
@@ -468,7 +683,7 @@ const NetProfitAndSalesByDate = () => {
               )}
             </div>
 
-            {/* Row 2: sub-period buttons */}
+            {/* Row 2: sub-period buttons (hidden when drill is active) */}
             <SubPeriodRow
               level={level}
               selectedQuarters={selectedQuarters}
@@ -477,6 +692,8 @@ const NetProfitAndSalesByDate = () => {
               toggleMonth={toggleMonth}
               accentColor={palette.primaryGreen}
               disabled={isLoadingOrFetching}
+              drillYear={drillYear}
+              drillQuarter={drillQuarter}
             />
           </div>
         }
