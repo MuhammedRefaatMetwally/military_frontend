@@ -12,6 +12,7 @@ import {
   salesAnalysesQueryKeys,
   SalesAnalysisListResponse,
   SalesBreakdownResponse,
+  TransactionsWaterfallResponse,
   type DetailedSalesBreakdownParams,
   type DetailedTimeSalesParams,
   type HierarchicalSalesParams,
@@ -104,12 +105,12 @@ export const useMonthlyProfit = (
         ...options,
       });
 
-export const useTransactionsWaterfall = (
-  params: TransactionsWaterfallParams,
-  options?: QueryOptions<SalesAnalysisListResponse>,
-) =>
-  useQuery<SalesAnalysisListResponse, ApiError>({
-    queryKey: salesAnalysesQueryKeys.transactionsWaterfall(params),
-    queryFn: () => getTransactionsWaterfall(params),
-    ...options,
-  });
+      export const useTransactionsWaterfall = (
+        params: TransactionsWaterfallParams,
+        options?: QueryOptions<TransactionsWaterfallResponse>,
+      ) =>
+        useQuery<TransactionsWaterfallResponse, ApiError>({
+          queryKey: salesAnalysesQueryKeys.transactionsWaterfall(params),
+          queryFn: () => getTransactionsWaterfall(params),
+          ...options,
+        });

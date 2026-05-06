@@ -13,6 +13,7 @@ import type {
   SalesProfitByCategoryParams,
   SalesProfitByCategoryResponse,
   TransactionsWaterfallParams,
+  TransactionsWaterfallResponse,
 } from "./types";
 
 const SALES_ANALYSES_BASE = "/api/datasorce/sales-analyses";
@@ -138,7 +139,13 @@ export const getDetailedSalesBreakdown = async (
     {
       params: withDefinedParams({
         at: params.at,
-        ...buildBaseFilterParams(params),
+        years: toCsv(params.years),
+        branch: params.branchIds,      
+        region: toCsv(params.regionIds),
+        group1: toCsv(params.group1Ids),
+        group2: toCsv(params.group2Ids),
+        group3: toCsv(params.group3Ids),
+        agreement: params.agreementId,
       }),
     },
   );
@@ -147,13 +154,15 @@ export const getDetailedSalesBreakdown = async (
 
 export const getTransactionsWaterfall = async (
   params: TransactionsWaterfallParams,
-): Promise<SalesAnalysisListResponse> => {
-  const response = await axiosInstance.get<SalesAnalysisListResponse>(
+): Promise<TransactionsWaterfallResponse> => {
+  const response = await axiosInstance.get<TransactionsWaterfallResponse>(
     `${SALES_ANALYSES_BASE}/transactions-waterfall/`,
     {
       params: withDefinedParams({
         granularity: params.granularity,
+        // Option A  years list
         years: toCsv(params.years),
+        // Option B  range
         year_from: params.yearFrom,
         year_to: params.yearTo,
         branch: toCsv(params.branchIds),
