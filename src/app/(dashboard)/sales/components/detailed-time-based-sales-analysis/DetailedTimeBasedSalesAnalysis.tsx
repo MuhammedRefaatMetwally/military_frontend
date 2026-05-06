@@ -332,6 +332,7 @@ const DetailedTimeBasedSalesAnalysis = () => {
   const {
     data: rawData,
     isLoading,
+    isFetching,
     isError,
   } = useDetailedTimeSales(params, {
     staleTime: 5 * 60 * 1000,
@@ -401,7 +402,7 @@ const DetailedTimeBasedSalesAnalysis = () => {
       }
     >
       <AnalyticsTable headers={headers} minWidth={980}>
-        {isLoading && (
+        {isLoading && salesAnalysisData.length === 0 && (
           <tr>
             <td colSpan={7}>
               <AnalyticsLoader
@@ -443,9 +444,7 @@ const DetailedTimeBasedSalesAnalysis = () => {
           </tr>
         )}
 
-        {!isLoading &&
-          !isError &&
-          salesAnalysisData.map((year) => {
+        {salesAnalysisData.map((year) => {
             const yearMetrics = getRollupMetrics(getYearMonths(year));
             const isYearExpanded = expandedYears.has(year.year);
 
