@@ -29,6 +29,8 @@ interface ChartCardProps {
   titleFlag?: ChartCardTitleFlag;
   titleFlagNumber?: number;
   headerExtra?: React.ReactNode;
+  // ── NEW: renders inside glass-panel, below the chart area ─────────────────
+  footer?: React.ReactNode;
   className?: string;
   plotOverflowY?: "hidden" | "auto" | "visible";
   innerChartHeight?: string;
@@ -38,7 +40,6 @@ interface ChartCardProps {
   scrollViewportDir?: "ltr" | "rtl";
   delay?: number;
   aiPowered?: boolean;
-  // ── NEW: forward arbitrary ECharts event handlers ──────────────────────────
   onEvents?: Record<string, (params: unknown) => void>;
 }
 
@@ -415,6 +416,7 @@ function ChartCard({
   titleFlag,
   titleFlagNumber,
   headerExtra,
+  footer,
   className = "flex",
   plotOverflowY = "hidden",
   innerChartHeight,
@@ -496,12 +498,6 @@ function ChartCard({
     return () => window.removeEventListener("resize", onWinResize);
   }, [isFullscreen, resizeFullscreenChart]);
 
-  // ── chart element factory ─────────────────────────────────────────────────
-  // onEvents is passed directly to ReactEChartsCore which wires them onto the
-  // underlying ECharts instance via echartsInstance.on(eventName, handler).
-  // This is the only correct way to receive ECharts native events (click,
-  // mouseover, etc.) — attaching a DOM onClick to the wrapper div does NOT
-  // work because ECharts renders to <canvas> and stops DOM event propagation.
   const chartEl = useCallback(
     (extraHeight?: string, forFullscreen?: boolean) => (
       <ReactEChartsCore
@@ -514,8 +510,6 @@ function ChartCard({
         onEvents={onEvents}
       />
     ),
-    // onEvents intentionally included — if the caller passes a new handler map
-    // (e.g. after drill-level changes) the chart instance must re-bind.
     [mergedOption, onEvents],
   );
 
@@ -532,10 +526,9 @@ function ChartCard({
 
   const chartShell = (
     <>
-      {/* ── Header: title (left) + headerExtra (center/right) + expand btn ── */}
+      {/* ── Header ── */}
       <div className="px-5 pt-4 pb-2">
         <div className="flex items-start gap-3 w-full">
-          {/* Title + subtitle — shrinks but never wraps aggressively */}
           {showTitleBlock && (
             <div className="shrink-0">
               <div className="flex items-center gap-2">
@@ -565,7 +558,6 @@ function ChartCard({
             </div>
           )}
 
-          {/* headerExtra — takes all remaining space, content aligns end (RTL right) */}
           {(headerExtra || aiPowered) && (
             <div className="flex-1 flex items-start justify-end gap-2 min-w-0 overflow-visible">
               <div className="flex flex-col items-end gap-1.5 min-w-0 overflow-visible">
@@ -586,7 +578,6 @@ function ChartCard({
             </div>
           )}
 
-          {/* Expand button — always far right */}
           <button
             type="button"
             onClick={toggleFullscreen}
@@ -624,6 +615,13 @@ function ChartCard({
           {inlineChartNode}
         </div>
       </div>
+
+      {/* ── Footer slot: renders INSIDE glass-panel, below chart ── */}
+      {footer && (
+        <div style={{ width: "100%" }}>
+          {footer}
+        </div>
+      )}
     </>
   );
 
