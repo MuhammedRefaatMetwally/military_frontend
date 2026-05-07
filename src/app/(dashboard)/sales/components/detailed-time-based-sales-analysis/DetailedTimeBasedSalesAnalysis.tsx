@@ -19,7 +19,7 @@ import {
 } from "./utils/data";
 import AnalyticsLoader from "@/components/ui/analytics-loader";
 
-// ── All pure helpers (unchanged) ──────────────────────────────────────────────
+// ── Types ──────────────────────────────────────────────────────────────────────
 
 type RollupMetrics = {
   net: number;
@@ -29,6 +29,8 @@ type RollupMetrics = {
   invoices: number;
   margin: number;
 };
+
+// ── Pure Helper Functions ──────────────────────────────────────────────────────
 
 function calculateYoy(net: number, netYoyPrior: number | null) {
   if (netYoyPrior == null || netYoyPrior === 0) return null;
@@ -50,6 +52,7 @@ function calculateAverage(values: Array<number | null>) {
 function getQuarterMonths(q: SalesAnalysisQuarter) {
   return q.months;
 }
+
 function getYearMonths(y: SalesAnalysisYear) {
   return y.quarters.flatMap((q) => q.months);
 }
@@ -85,11 +88,12 @@ function getRollupMetrics(months: SalesAnalysisMonth[]): RollupMetrics {
 function formatNumber(value: number) {
   return value.toLocaleString("en-US");
 }
+
 function formatPercent(value: number) {
   return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
 }
 
-// ── Sub-components (unchanged) ────────────────────────────────────────────────
+// ── MetricTrend Sub-component ──────────────────────────────────────────────────
 
 function MetricTrend({ value }: { value: number | null }) {
   if (value == null)
@@ -108,6 +112,8 @@ function MetricTrend({ value }: { value: number | null }) {
     </span>
   );
 }
+
+// ── MetricsCells Sub-component ─────────────────────────────────────────────────
 
 function MetricsCells({
   metrics,
@@ -173,6 +179,8 @@ function MetricsCells({
     </>
   );
 }
+
+// ── AccordionLabelCell Sub-component ───────────────────────────────────────────
 
 function AccordionLabelCell({
   label,
@@ -264,6 +272,8 @@ function AccordionLabelCell({
   );
 }
 
+// ── SkeletonRows Sub-component ─────────────────────────────────────────────────
+
 function SkeletonRows() {
   return (
     <>
@@ -298,7 +308,6 @@ function SkeletonRows() {
 // ── Main component ─────────────────────────────────────────────────────────────
 
 const DetailedTimeBasedSalesAnalysis = () => {
-  // ── Read only the relevant sales filter fields from the store ────────────
   const activeBranches = useFilterStore((s) => s.activeBranches);
   const region = useFilterStore((s) => s.region);
   const productCategory = useFilterStore((s) => s.productCategory);
@@ -306,29 +315,18 @@ const DetailedTimeBasedSalesAnalysis = () => {
   const agreement = useFilterStore((s) => s.agreement);
   const year = useFilterStore((s) => s.year);
 
-  // ── Build params — only pass non-empty values to the API ─────────────────
-  //
-  //  The API treats missing params as "no filter" (returns all data).
-  //  Passing empty arrays or empty strings would cause a 400/empty response,
-  //  so we only include a field when the user has actually selected something.
-  //
   const params = useMemo(
     () => ({
-      // year is always present (defaults to current year in filterStore)
       years: year ? [Number(year)] : undefined,
-
-      // multi-select filters — only send when user picked at least one
       branchIds: activeBranches.length > 0 ? activeBranches : undefined,
       regionIds: region.length > 0 ? region : undefined,
       group1Ids: productCategory.length > 0 ? productCategory : undefined,
       group2Ids: subcategory.length > 0 ? subcategory : undefined,
-      // group3Ids — not exposed in the sales filter bar for this endpoint
       agreementId: agreement.length === 1 ? agreement[0] : undefined,
     }),
     [year, activeBranches, region, productCategory, subcategory, agreement],
   );
 
-  // ── Data fetching ─────────────────────────────────────────────────────────
   const {
     data: rawData,
     isLoading,
@@ -338,13 +336,11 @@ const DetailedTimeBasedSalesAnalysis = () => {
     staleTime: 5 * 60 * 1000,
   });
 
-  // ── Transform API response → component data shape ─────────────────────────
   const salesAnalysisData = useMemo<SalesAnalysisYear[]>(
     () => (rawData ? transformDetailedTimeSales(rawData) : []),
     [rawData],
   );
 
-  // ── Accordion state ───────────────────────────────────────────────────────
   const [expandedYears, setExpandedYears] = useState<Set<string>>(
     () => new Set(),
   );
@@ -352,7 +348,6 @@ const DetailedTimeBasedSalesAnalysis = () => {
     () => new Set(),
   );
 
-  // ── Bar-chart max values ──────────────────────────────────────────────────
   const { maxNet, maxInvoices } = useMemo(() => {
     if (!salesAnalysisData.length) return { maxNet: 1, maxInvoices: 1 };
     const allMetrics: RollupMetrics[] = [];
@@ -385,7 +380,6 @@ const DetailedTimeBasedSalesAnalysis = () => {
       return next;
     });
 
-  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <AnalyticsTableCard
       title="التحليل الزمني التفصيلي للمبيعات"
@@ -445,82 +439,82 @@ const DetailedTimeBasedSalesAnalysis = () => {
         )}
 
         {salesAnalysisData.map((year) => {
-            const yearMetrics = getRollupMetrics(getYearMonths(year));
-            const isYearExpanded = expandedYears.has(year.year);
+          const yearMetrics = getRollupMetrics(getYearMonths(year));
+          const isYearExpanded = expandedYears.has(year.year);
 
-            return (
-              <Fragment key={year.year}>
-                <tr style={{ background: "var(--bg-elevated)" }}>
-                  <AccordionLabelCell
-                    label={year.year}
-                    subtitle="السنة"
-                    depth={0}
-                    canExpand
-                    isOpen={isYearExpanded}
-                    onToggle={() => toggleYear(year.year)}
-                  />
-                  <MetricsCells
-                    metrics={yearMetrics}
-                    maxNet={maxNet}
-                    maxInvoices={maxInvoices}
-                    barColor="#3b82f6"
-                  />
-                </tr>
+          return (
+            <Fragment key={year.year}>
+              <tr style={{ background: "var(--bg-elevated)" }}>
+                <AccordionLabelCell
+                  label={year.year}
+                  subtitle="السنة"
+                  depth={0}
+                  canExpand
+                  isOpen={isYearExpanded}
+                  onToggle={() => toggleYear(year.year)}
+                />
+                <MetricsCells
+                  metrics={yearMetrics}
+                  maxNet={maxNet}
+                  maxInvoices={maxInvoices}
+                  barColor="#3b82f6"
+                />
+              </tr>
 
-                {isYearExpanded &&
-                  year.quarters.map((quarter) => {
-                    const quarterKey = `${year.year}-${quarter.id}`;
-                    const quarterMetrics = getRollupMetrics(
-                      getQuarterMonths(quarter),
-                    );
-                    const isQuarterExpanded = expandedQuarters.has(quarterKey);
+              {isYearExpanded &&
+                year.quarters.map((quarter) => {
+                  const quarterKey = `${year.year}-${quarter.id}`;
+                  const quarterMetrics = getRollupMetrics(
+                    getQuarterMonths(quarter),
+                  );
+                  const isQuarterExpanded = expandedQuarters.has(quarterKey);
 
-                    return (
-                      <Fragment key={quarterKey}>
-                        <tr
-                          style={{
-                            background:
-                              "color-mix(in srgb, var(--bg-elevated) 55%, transparent)",
-                          }}
-                        >
-                          <AccordionLabelCell
-                            label={quarter.label}
-                            subtitle="ربع سنوي"
-                            depth={1}
-                            canExpand
-                            isOpen={isQuarterExpanded}
-                            onToggle={() => toggleQuarter(quarterKey)}
-                          />
-                          <MetricsCells
-                            metrics={quarterMetrics}
-                            maxNet={maxNet}
-                            maxInvoices={maxInvoices}
-                            barColor="#0891b2"
-                          />
-                        </tr>
+                  return (
+                    <Fragment key={quarterKey}>
+                      <tr
+                        style={{
+                          background:
+                            "color-mix(in srgb, var(--bg-elevated) 55%, transparent)",
+                        }}
+                      >
+                        <AccordionLabelCell
+                          label={quarter.label}
+                          subtitle="ربع سنوي"
+                          depth={1}
+                          canExpand
+                          isOpen={isQuarterExpanded}
+                          onToggle={() => toggleQuarter(quarterKey)}
+                        />
+                        <MetricsCells
+                          metrics={quarterMetrics}
+                          maxNet={maxNet}
+                          maxInvoices={maxInvoices}
+                          barColor="#0891b2"
+                        />
+                      </tr>
 
-                        {isQuarterExpanded &&
-                          quarter.months.map((month) => (
-                            <tr key={`${quarterKey}-${month.id}`}>
-                              <AccordionLabelCell
-                                label={month.label}
-                                subtitle={month.monthOrderLabel}
-                                depth={2}
-                              />
-                              <MetricsCells
-                                metrics={getMonthRollup(month)}
-                                maxNet={maxNet}
-                                maxInvoices={maxInvoices}
-                                barColor="#047857"
-                              />
-                            </tr>
-                          ))}
-                      </Fragment>
-                    );
-                  })}
-              </Fragment>
-            );
-          })}
+                      {isQuarterExpanded &&
+                        quarter.months.map((month) => (
+                          <tr key={`${quarterKey}-${month.id}`}>
+                            <AccordionLabelCell
+                              label={month.label}
+                              subtitle={month.monthOrderLabel}
+                              depth={2}
+                            />
+                            <MetricsCells
+                              metrics={getMonthRollup(month)}
+                              maxNet={maxNet}
+                              maxInvoices={maxInvoices}
+                              barColor="#047857"
+                            />
+                          </tr>
+                        ))}
+                    </Fragment>
+                  );
+                })}
+            </Fragment>
+          );
+        })}
       </AnalyticsTable>
     </AnalyticsTableCard>
   );
