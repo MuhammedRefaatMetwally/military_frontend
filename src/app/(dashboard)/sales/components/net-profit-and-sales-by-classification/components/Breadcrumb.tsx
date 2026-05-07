@@ -1,4 +1,4 @@
-import type { GroupLevel } from "./classification-v2.constants";
+import { GroupLevel } from "../utils/classification.constants";
 
 interface BreadcrumbProps {
   drillStack: { level: GroupLevel; name: string }[];
