@@ -18,6 +18,7 @@ import YearOverYearSalesComparison from "./components/year-over-year-sales-compa
 import NetProfitByCategory from "./components/net-profit-by-category/NetProfitByCategory";
 import NetSalesOverTimeForEachBranch from "./components/net-sales-over-time-for-each-branch/NetSalesOverTimeForEachBranch";
 import { getBranchColumns } from "./utils/branchColumns";
+import { DrillPath } from "./utils/buildBasketPriceBubblePoints";
 
 export default function BranchesPage() {
   const branches = useMemo(() => getBranchData(), []);
@@ -27,10 +28,8 @@ export default function BranchesPage() {
   const [basketPriceActiveBranches, setBasketPriceActiveBranches] = useState<
     string[]
   >(() => BRANCH_PRODUCT_ANALYSIS.map((b) => b.branch));
-  const [basketPriceCategory, setBasketPriceCategory] = useState<string | null>(
-    null,
-  );
-
+ 
+  const [drillPath, setDrillPath] = useState<DrillPath>([]);
   // ألوان الفئات (مطابقة لصفحة /products)
 
   return (
@@ -51,21 +50,21 @@ export default function BranchesPage() {
       />
       {/* ── تحليل المنتجات: حجم المبيعات + متوسط السعر ── */}
       <BranchBasketPriceBubbleSection
-        variant="toggles"
-        basketPriceCategory={basketPriceCategory}
-        setBasketPriceCategory={setBasketPriceCategory}
+        drillPath={drillPath}
+        setDrillPath={setDrillPath}
         basketPriceActiveBranches={basketPriceActiveBranches}
         setBasketPriceActiveBranches={setBasketPriceActiveBranches}
+        variant="toggles"
       />
 
       {/* ── تغير المبيعات حسب السعر + صافي الأرباح حسب الفئة ── */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <BranchBasketPriceBubbleSection
-          variant="dropdown"
-          basketPriceCategory={basketPriceCategory}
-          setBasketPriceCategory={setBasketPriceCategory}
+          drillPath={drillPath}
+          setDrillPath={setDrillPath}
           basketPriceActiveBranches={basketPriceActiveBranches}
           setBasketPriceActiveBranches={setBasketPriceActiveBranches}
+          variant="toggles"
         />
         <NetProfitByCategory />
       </div>
