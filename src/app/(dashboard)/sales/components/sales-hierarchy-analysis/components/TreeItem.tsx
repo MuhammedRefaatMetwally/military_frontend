@@ -1,6 +1,6 @@
 import { secondarySalesMetric } from "../utils/data";
 import { motion } from "framer-motion";
-import { LeadArrowIcon } from "../utils/LeadArrowIcon";
+import { LeadArrowIcon } from "./LeadArrowIcon";
 
 interface TreeNode {
   id: string;
