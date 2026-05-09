@@ -175,6 +175,8 @@ export interface ApiResponse<T> {
     years?: number[];
     month?: number[];
     quarter?: number[];
+    fromDate?: string;   
+    toDate?: string;     
     regionIds?: (string | number)[];
     branchIds?: (string | number)[];
     group1Ids?: (string | number)[];
