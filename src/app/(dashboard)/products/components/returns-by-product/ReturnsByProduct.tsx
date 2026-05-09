@@ -148,19 +148,35 @@ const ReturnsByProduct = () => {
   const subcategory     = useFilterStore((s) => s.subcategory);
   const product         = useFilterStore((s) => s.product);
 
+  // ── NEW: date range filters (case 9 — from_date / to_date) ─────────────────
+  const dateRangeFrom      = useFilterStore((s) => s.dateRangeFrom);
+  const dateRangeTo        = useFilterStore((s) => s.dateRangeTo);
+  const isDateRangeApplied = useFilterStore((s) => s.isDateRangeApplied);
+
   // ── Theme ───────────────────────────────────────────────────────────────────
   const mode   = useThemeStore((s) => s.mode);
   const isDark = mode === "dark";
   const spineColor     = isDark ? "#64748b" : "#94a3b8";
   const splitLineColor = isDark ? "rgba(148,163,184,0.22)" : "rgba(100,116,139,0.3)";
 
+  // ── Date-range guard ────────────────────────────────────────────────────────
+  // When the user applies a custom date range (case 9), send fromDate/toDate
+  // and suppress year/quarter/month to avoid conflicting params on the backend.
+  // For standard period selections (cases 3 & 10), use year/quarter/month as before.
+  const usingDateRange = isDateRangeApplied && !!dateRangeFrom && !!dateRangeTo;
+
   // ── Query ───────────────────────────────────────────────────────────────────
   const { data, isLoading, error, refetch } = useReturnsByProduct({
-    year:      year    ? Number(year)      : undefined,
-    month:     month   ? [Number(month)]   : undefined,
-    quarter:   quarter ? [Number(quarter)] : undefined,
-    regionIds: region.length         ? region          : undefined,
-    branchIds: activeBranches.length ? activeBranches  : undefined,
+    // Temporal — mutually exclusive with date range
+    year:     !usingDateRange && year    ? Number(year)      : undefined,
+    quarter:  !usingDateRange && quarter ? [Number(quarter)] : undefined,
+    month:    !usingDateRange && month   ? [Number(month)]   : undefined,
+    // Date range — case 9 (from_date / to_date)
+    fromDate: usingDateRange ? dateRangeFrom : undefined,
+    toDate:   usingDateRange ? dateRangeTo   : undefined,
+    // Dimensions — cases 3 (branch) & 10 (region + group1 + year)
+    regionIds: region.length          ? region          : undefined,
+    branchIds: activeBranches.length  ? activeBranches  : undefined,
     group1Ids: productCategory.length ? productCategory : undefined,
     group2Ids: subcategory.length     ? subcategory     : undefined,
     group3Ids: product.length         ? product         : undefined,
@@ -216,7 +232,6 @@ const ReturnsByProduct = () => {
           rotate: 28,
           fontSize: 9,
           interval: 0,
-          // Full name on hover via tooltip — short label in axis
           color: isDark ? "#94a3b8" : "#64748b",
         },
         splitLine: { show: false },
@@ -266,7 +281,6 @@ const ReturnsByProduct = () => {
               color: getBarColor(p.return_rate),
               borderRadius: [4, 4, 0, 0],
             },
-            // Show sold_qty as subtle label above bar
             label: {
               show: p.return_qty > 0,
               position: "top" as const,
@@ -309,10 +323,8 @@ const ReturnsByProduct = () => {
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
-  // Pass-through while dynamic import resolves (SkeletonChart handles it)
   if (isLoading) return <SkeletonChart />;
 
-  // Empty state — no data for active filters
   if (!isLoading && !error && returnsData.length === 0) return <EmptyState />;
 
   return (
@@ -329,7 +341,7 @@ const ReturnsByProduct = () => {
       <ChartCard
         title="المرتجعات حسب المنتج"
         titleFlag="green"
-        subtitle="كمية المرتجعات ونسة الإرجاع لأعلى 10 منتجات"
+        subtitle="كمية المرتجعات ونسبة الإرجاع لأعلى 10 منتجات"
         option={returnsOption}
         height="480px"
         delay={2}
