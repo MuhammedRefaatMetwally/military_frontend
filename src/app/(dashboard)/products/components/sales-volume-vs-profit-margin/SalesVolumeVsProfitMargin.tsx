@@ -546,7 +546,7 @@ const SalesVolumeVsProfitMargin = () => {
     >
       <AlertCircle size={28} style={{ color: "var(--accent-red)" }} />
       <span style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center" }}>
-        {(error as Error)?.message ?? "حدث خطأ أثناء تحميل البيانات"}
+        {(error as unknown as { message?: string })?.message ?? "حدث خطأ أثناء تحميل البيانات"}
       </span>
       <button
         onClick={handleReset}
