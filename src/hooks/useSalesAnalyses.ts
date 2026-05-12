@@ -25,7 +25,7 @@ import {
 } from "@/api/sales-analyses";
 import { useQuery, type UseQueryOptions } from "@tanstack/react-query";
 
-// ─── shared helper type ───────────────────────────────────────────────────────
+// ─── Shared helper type ───────────────────────────────────────────────────────
 
 /**
  * Strips the keys managed internally by useQuery so callers only
@@ -39,6 +39,8 @@ type QueryOptions<TData, TError = ApiError> = Omit<
   "queryKey" | "queryFn"
 >;
 
+// ─── Hooks ────────────────────────────────────────────────────────────────────
+
 export const useNetSalesProfitChart = (
   params: NetSalesProfitChartParams,
   options?: QueryOptions<NetSalesProfitChartResponse>,
@@ -49,16 +51,15 @@ export const useNetSalesProfitChart = (
     ...options,
   });
 
-  export const useSalesProfitByCategory = (
-    params: SalesProfitByCategoryParams,
-    options?: QueryOptions<SalesProfitByCategoryResponse>,
-  ) =>
-    useQuery<SalesProfitByCategoryResponse, ApiError>({
-      queryKey: salesAnalysesQueryKeys.salesProfitByCategory(params),
-      queryFn: () =>
-        getSalesProfitByCategory(params),
-      ...options,
-    });
+export const useSalesProfitByCategory = (
+  params: SalesProfitByCategoryParams,
+  options?: QueryOptions<SalesProfitByCategoryResponse>,
+) =>
+  useQuery<SalesProfitByCategoryResponse, ApiError>({
+    queryKey: salesAnalysesQueryKeys.salesProfitByCategory(params),
+    queryFn: () => getSalesProfitByCategory(params),
+    ...options,
+  });
 
 export const useHierarchicalSales = (
   params: HierarchicalSalesParams,
@@ -80,37 +81,37 @@ export const useMonthlyProfit = (
     ...options,
   });
 
-  export const useDetailedTimeSales = (
-    params: DetailedTimeSalesParams,
-    options?: QueryOptions<DetailedTimeSalesResponse>,
-  ) =>
-    useQuery<DetailedTimeSalesResponse, ApiError>({
-      queryKey: salesAnalysesQueryKeys.detailedTimeSales(params),
-      queryFn: () => getDetailedTimeSales(params),
-      ...options,
-    });
+export const useDetailedTimeSales = (
+  params: DetailedTimeSalesParams,
+  options?: QueryOptions<DetailedTimeSalesResponse>,
+) =>
+  useQuery<DetailedTimeSalesResponse, ApiError>({
+    queryKey: salesAnalysesQueryKeys.detailedTimeSales(params),
+    queryFn: () => getDetailedTimeSales(params),
+    ...options,
+  });
 
-    export const useDetailedSalesBreakdown = (
-      params: DetailedSalesBreakdownParams,
-      options?: QueryOptions<SalesBreakdownResponse>,
-    ) =>
-      useQuery<SalesBreakdownResponse, ApiError>({
-        queryKey: salesAnalysesQueryKeys.detailedSalesBreakdown(params),
-        queryFn: () => getDetailedSalesBreakdown(params),
-        staleTime: 5 * 60_000,
-        gcTime: 30 * 60_000,
-        retry: 2,
-        retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 30_000),
-        placeholderData: (prev : SalesBreakdownResponse | undefined) => prev,
-        ...options,
-      });
+export const useDetailedSalesBreakdown = (
+  params: DetailedSalesBreakdownParams,
+  options?: QueryOptions<SalesBreakdownResponse>,
+) =>
+  useQuery<SalesBreakdownResponse, ApiError>({
+    queryKey: salesAnalysesQueryKeys.detailedSalesBreakdown(params),
+    queryFn: () => getDetailedSalesBreakdown(params),
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
+    retry: 2,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 30_000),
+    placeholderData: (prev: SalesBreakdownResponse | undefined) => prev,
+    ...options,
+  });
 
-      export const useTransactionsWaterfall = (
-        params: TransactionsWaterfallParams,
-        options?: QueryOptions<TransactionsWaterfallResponse>,
-      ) =>
-        useQuery<TransactionsWaterfallResponse, ApiError>({
-          queryKey: salesAnalysesQueryKeys.transactionsWaterfall(params),
-          queryFn: () => getTransactionsWaterfall(params),
-          ...options,
-        });
+export const useTransactionsWaterfall = (
+  params: TransactionsWaterfallParams,
+  options?: QueryOptions<TransactionsWaterfallResponse>,
+) =>
+  useQuery<TransactionsWaterfallResponse, ApiError>({
+    queryKey: salesAnalysesQueryKeys.transactionsWaterfall(params),
+    queryFn: () => getTransactionsWaterfall(params),
+    ...options,
+  });

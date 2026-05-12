@@ -12,8 +12,9 @@ export const QUICK_PERIODS = [
 
 export const SALES_PAGE_QUICK_PERIODS = [{ value: "month", label: "شهري" }];
 export const SALES_QUICK_PERIOD_VALUES = new Set<string>(
-  SALES_PAGE_QUICK_PERIODS.map((p) => p.value),
+  QUICK_PERIODS.map((p) => p.value),  
 );
+
 export const BRANCHES_PAGE_QUICK_PERIODS = [{ value: "month", label: "شهري" }];
 export const EMPLOYEES_PAGE_QUICK_PERIODS = [{ value: "month", label: "شهري" }];
 export const AI_BASKET_PAGE_QUICK_PERIODS = [{ value: "month", label: "شهري" }];
@@ -54,12 +55,60 @@ export function getSalesQuickPeriodRange(
   period: string,
 ): { from: string; to: string } | null {
   if (!SALES_QUICK_PERIOD_VALUES.has(period)) return null;
+
   const now = new Date();
   const y = now.getFullYear();
-  const m = now.getMonth();
-  const start = new Date(y, m, 1);
-  const end = new Date(y, m + 1, 0);
-  return { from: formatLocalYmd(start), to: formatLocalYmd(end) };
+  const m = now.getMonth(); // 0-indexed
+
+  switch (period) {
+    case "month":
+      return {
+        from: formatLocalYmd(new Date(y, m, 1)),
+        to: formatLocalYmd(new Date(y, m + 1, 0)),
+      };
+
+    case "last-month": {
+      const lm = m === 0 ? 11 : m - 1;
+      const ly = m === 0 ? y - 1 : y;
+      return {
+        from: formatLocalYmd(new Date(ly, lm, 1)),
+        to: formatLocalYmd(new Date(ly, lm + 1, 0)),
+      };
+    }
+
+    case "quarter": {
+      const q = Math.floor(m / 3);           // 0-indexed quarter
+      return {
+        from: formatLocalYmd(new Date(y, q * 3, 1)),
+        to: formatLocalYmd(new Date(y, q * 3 + 3, 0)),
+      };
+    }
+
+    case "last-quarter": {
+      const q = Math.floor(m / 3);
+      const lq = q === 0 ? 3 : q - 1;
+      const ly = q === 0 ? y - 1 : y;
+      return {
+        from: formatLocalYmd(new Date(ly, lq * 3, 1)),
+        to: formatLocalYmd(new Date(ly, lq * 3 + 3, 0)),
+      };
+    }
+
+    case "year":
+      return {
+        from: formatLocalYmd(new Date(y, 0, 1)),
+        to: formatLocalYmd(new Date(y, 11, 31)),
+      };
+
+    case "last-year":
+      return {
+        from: formatLocalYmd(new Date(y - 1, 0, 1)),
+        to: formatLocalYmd(new Date(y - 1, 11, 31)),
+      };
+
+    default:
+      return null;
+  }
 }
 
 // ── Regions — IDs 21–25 from API env ─────────────────────────────────────────

@@ -6,6 +6,8 @@ export type HierarchicalAt = "branch" | "group1" | "group2" | "group3" | "produc
 export type BreakdownAt = "market" | "group1" | "group2" | "group3" | "product";
 export type WaterfallGranularity = "year" | "quarter";
 
+// ─── Shared base filters ──────────────────────────────────────────────────────
+
 export interface SalesAnalysisBaseFilters {
   years?: number[];
   branchIds?: string[];
@@ -15,6 +17,8 @@ export interface SalesAnalysisBaseFilters {
   group3Ids?: string[];
   agreementId?: string;
 }
+
+// ─── Net Sales / Profit Chart ─────────────────────────────────────────────────
 
 export interface NetSalesProfitChartParams extends SalesAnalysisBaseFilters {
   level: SalesAnalysisLevel;
@@ -39,93 +43,14 @@ export interface NetSalesProfitChartResponse {
   data: NetSalesProfitPoint[];
 }
 
+// ─── Sales Profit by Category ─────────────────────────────────────────────────
+
 export interface SalesProfitByCategoryParams extends SalesAnalysisBaseFilters {
   groupLevel: GroupLevel;
   level?: SalesAnalysisLevel;
   period?: number[];
   quarter?: number[];
 }
-
-export interface HierarchicalSalesParams extends SalesAnalysisBaseFilters {
-  at: HierarchicalAt;
-  level?: SalesAnalysisLevel;
-  period?: number[];
-  splitByPeriod?: boolean;
-}
-
-export interface MonthlyProfitParams extends SalesAnalysisBaseFilters {
-  yearFrom?: number;
-  yearTo?: number;
-}
-
-export interface DetailedTimeSalesParams extends SalesAnalysisBaseFilters {}
-
-export interface DetailedSalesBreakdownParams {
-  at: BreakdownAt;
-  // base fields (copied from SalesAnalysisBaseFilters)
-  years?: number[];
-  branchIds?: string;        // ← single string, not array
-  regionIds?: string[];
-  group1Ids?: string[];
-  group2Ids?: string[];
-  group3Ids?: string[];
-  agreementId?: string;
-}
-
-
-export interface TransactionsWaterfallParams {
-  granularity: WaterfallGranularity;
-  /** Option A — explicit list */
-  years?: number[];
-  /** Option B — range (both required together) */
-  yearFrom?: number;
-  yearTo?: number;
-  branchIds?: string[];
-  regionIds?: string[];
-}
-export interface WaterfallYearMarket {
-  // extend when the API returns real market fields
-  [key: string]: unknown;
-}
-export interface WaterfallYearEntry {
-  year: number;
-  total: number;
-  markets: WaterfallYearMarket[];
-}
-
-export interface WaterfallYearResponse {
-  data: WaterfallYearEntry[];
-}
-
-export interface WaterfallQuarterPeriod {
-  [key: string]: unknown;
-}
-
-export interface WaterfallQuarterResponse {
-  granularity: "quarter";
-  years: number[];
-  branch_ids: number[];
-  metric: string;
-  max_value: number;
-  periods: WaterfallQuarterPeriod[];
-}
-
-export type TransactionsWaterfallResponse = | WaterfallYearResponse| WaterfallQuarterResponse;
-
-export const isWaterfallYearResponse = (
-  r: TransactionsWaterfallResponse,
-): r is WaterfallYearResponse => "data" in r;
-
-export const isWaterfallQuarterResponse = (
-  r: TransactionsWaterfallResponse,
-): r is WaterfallQuarterResponse => "granularity" in r;
-
-export interface SalesAnalysisRecord {
-  [key: string]: string | number | boolean | null;
-}
-
-export type SalesAnalysisListResponse = SalesAnalysisRecord[];
-
 
 export interface CategoryRow {
   id: number;
@@ -142,6 +67,14 @@ export interface SalesProfitByCategoryResponse {
   data: CategoryRow[];
 }
 
+// ─── Hierarchical Sales ───────────────────────────────────────────────────────
+
+export interface HierarchicalSalesParams extends SalesAnalysisBaseFilters {
+  at: HierarchicalAt;
+  level?: SalesAnalysisLevel;
+  period?: number[];
+  splitByPeriod?: boolean;
+}
 
 export interface HierarchicalSalesRow {
   id: number;
@@ -167,6 +100,22 @@ export interface HierarchicalSalesResponse {
   data: HierarchicalSalesRow[];
 }
 
+// ─── Monthly Profit ───────────────────────────────────────────────────────────
+
+export interface MonthlyProfitParams extends SalesAnalysisBaseFilters {
+  yearFrom?: number;
+  yearTo?: number;
+}
+
+export interface SalesAnalysisRecord {
+  [key: string]: string | number | boolean | null;
+}
+
+export type SalesAnalysisListResponse = SalesAnalysisRecord[];
+
+// ─── Detailed Time Sales ──────────────────────────────────────────────────────
+
+export type DetailedTimeSalesParams = SalesAnalysisBaseFilters;
 
 export interface DetailedTimeSalesItem {
   year: number;
@@ -188,13 +137,24 @@ export interface DetailedTimeSalesResponse {
   data: DetailedTimeSalesItem[];
 }
 
+// ─── Detailed Sales Breakdown ─────────────────────────────────────────────────
 
+export interface DetailedSalesBreakdownParams {
+  at: BreakdownAt;
+  years?: number[];
+  branchIds?: string[];   // ← fixed: was incorrectly `string` (single), now `string[]`
+  regionIds?: string[];
+  group1Ids?: string[];
+  group2Ids?: string[];
+  group3Ids?: string[];
+  agreementId?: string;
+}
 
 export interface SalesBreakdownFilters {
   at: BreakdownAt;
   years?: number[];
-  regionIds?: string;
-  branchIds?: string[];
+  branchIds?: string[];   // ← fixed: was incorrectly `string` (single), now `string[]`
+  regionIds?: string[];
   group1Ids?: string[];
   group2Ids?: string[];
   group3Ids?: string[];
@@ -248,3 +208,89 @@ export interface SalesBreakdownResponse {
   data: SalesBreakdownRecord[];
   totals: SalesBreakdownRecord;
 }
+
+// ─── Transactions Waterfall ───────────────────────────────────────────────────
+
+export interface TransactionsWaterfallParams {
+  granularity: WaterfallGranularity;
+  /** Option A — explicit years list */
+  years?: number[];
+  /** Option B — year range (both required together) */
+  yearFrom?: number;
+  yearTo?: number;
+  branchIds?: string[];
+  regionIds?: string[];
+}
+
+/**
+ * One market (branch) entry inside a year row.
+ * Returned when granularity=year; first year always has markets=[].
+ */
+export interface WaterfallMarket {
+  name: string;
+  value: number;
+  transactionsPrev: number;
+  transactionsCurr: number;
+  changePct: number;
+}
+
+/**
+ * One year row in the granularity=year response.
+ */
+export interface WaterfallYearEntry {
+  year: number;
+  total: number;
+  markets: WaterfallMarket[]; // empty for the first year (no prior year to diff against)
+}
+
+/**
+ * Response shape when granularity=year → wrapped in { data: [...] }
+ */
+export interface WaterfallYearResponse {
+  data: WaterfallYearEntry[];
+}
+
+/**
+ * One period row in the granularity=quarter response.
+ * bridge_low / bridge_high are the waterfall bar bounds for chart rendering.
+ * All delta fields are null for the very first period (nothing to compare against).
+ */
+export interface WaterfallPeriod {
+  year: number;
+  quarter: number;
+  transaction_count: number;
+  previous_transaction_count: number | null;
+  delta: number | null;
+  change_type: "increase" | "decrease" | null;
+  bridge_low: number | null;
+  bridge_high: number | null;
+}
+
+/**
+ * Response shape when granularity=quarter → flat object (no data wrapper).
+ */
+export interface WaterfallQuarterResponse {
+  granularity: "quarter";
+  years: number[];
+  branch_ids: number[];
+  city_ids: number[];
+  companies_ids: number[];
+  agreement_ids: number[];
+  metric: string;
+  max_value: number;           // Y-axis ceiling for the waterfall chart
+  periods: WaterfallPeriod[];
+}
+
+export type TransactionsWaterfallResponse =
+  | WaterfallYearResponse
+  | WaterfallQuarterResponse;
+
+/** Narrows to the year-granularity shape */
+export const isWaterfallYearResponse = (
+  r: TransactionsWaterfallResponse,
+): r is WaterfallYearResponse => "data" in r;
+
+/** Narrows to the quarter-granularity shape */
+export const isWaterfallQuarterResponse = (
+  r: TransactionsWaterfallResponse,
+): r is WaterfallQuarterResponse => "granularity" in r;

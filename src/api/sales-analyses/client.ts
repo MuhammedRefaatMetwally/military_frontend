@@ -61,7 +61,6 @@ export const getNetSalesProfitChart = async (
       }),
     },
   );
-
   return response.data;
 };
 
@@ -80,7 +79,6 @@ export const getSalesProfitByCategory = async (
       }),
     },
   );
-
   return response.data;
 };
 
@@ -89,20 +87,21 @@ export const getHierarchicalSales = async (
 ): Promise<HierarchicalSalesResponse> => {
   const response = await axiosInstance.get<HierarchicalSalesResponse>(
     `${SALES_ANALYSES_BASE}/hierarchical-sales/`,
-    { params: withDefinedParams({
-      ...buildBaseFilterParams(params),
-      at: params.at,
-      level: params.level,
-      period: toCsv(params.period),
-      split_by_period:
-        params.splitByPeriod === undefined
-          ? undefined
-          : String(params.splitByPeriod),
-    }), },
+    {
+      params: withDefinedParams({
+        ...buildBaseFilterParams(params),
+        at: params.at,
+        level: params.level,
+        period: toCsv(params.period),
+        split_by_period:
+          params.splitByPeriod === undefined
+            ? undefined
+            : String(params.splitByPeriod),
+      }),
+    },
   );
   return response.data;
 };
-
 
 export const getMonthlyProfit = async (
   params: MonthlyProfitParams,
@@ -117,7 +116,6 @@ export const getMonthlyProfit = async (
       }),
     },
   );
-
   return response.data;
 };
 
@@ -140,7 +138,7 @@ export const getDetailedSalesBreakdown = async (
       params: withDefinedParams({
         at: params.at,
         years: toCsv(params.years),
-        branch: params.branchIds,      
+        branch: toCsv(params.branchIds),   // ← fixed: was `params.branchIds` (raw array), now toCsv
         region: toCsv(params.regionIds),
         group1: toCsv(params.group1Ids),
         group2: toCsv(params.group2Ids),
@@ -160,9 +158,9 @@ export const getTransactionsWaterfall = async (
     {
       params: withDefinedParams({
         granularity: params.granularity,
-        // Option A  years list
+        // Option A — explicit years list
         years: toCsv(params.years),
-        // Option B  range
+        // Option B — year range
         year_from: params.yearFrom,
         year_to: params.yearTo,
         branch: toCsv(params.branchIds),
@@ -170,6 +168,5 @@ export const getTransactionsWaterfall = async (
       }),
     },
   );
-
   return response.data;
 };
