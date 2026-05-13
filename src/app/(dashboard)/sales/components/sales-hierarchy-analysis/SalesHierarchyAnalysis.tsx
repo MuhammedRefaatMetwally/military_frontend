@@ -165,40 +165,9 @@ function HierarchyColumn({
     ...(agreementId       ? { agreementId } : {}),
   };
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // CRITICAL FIX — explicit queryKey that includes EVERY param.
-  //
-  // salesAnalysesQueryKeys.hierarchicalSales(params) almost certainly builds
-  // its key from SalesAnalysisBaseFilters only (years, branchIds, …) and does
-  // NOT include `level`, `period`, or `splitByPeriod`.  This means a cached
-  // year-level response is silently returned for a month-level query, so the
-  // column appears empty (the year cache has data but the month interpretation
-  // renders nothing because the items lack a `month` field that triggers the
-  // aggregation path — and worse, the year data may have already been shown so
-  // React Query considers the query "fresh" and never refetches).
-  //
-  // By providing our own queryKey that encodes ALL params, every unique
-  // combination of (at, level, period, years, filters) gets its own cache
-  // slot and the correct API call is always made.
-  // ─────────────────────────────────────────────────────────────────────────
-  const queryKey = [
-    "hierarchical-sales",
-    at,
-    level,
-    splitByPeriod,
-    years.join(","),
-    (period ?? []).join(","),
-    (branchIds  ?? []).join(","),
-    (regionIds  ?? []).join(","),
-    (group1Ids  ?? []).join(","),
-    (group2Ids  ?? []).join(","),
-    (group3Ids  ?? []).join(","),
-    agreementId ?? "",
-  ];
 
   const { data, isFetching, isError } = useHierarchicalSales(params, {
     enabled,
-    queryKey,                    // ← overrides whatever the hook builds internally
     staleTime:            5 * 60_000,
     gcTime:              10 * 60_000,
     refetchOnWindowFocus: false,
