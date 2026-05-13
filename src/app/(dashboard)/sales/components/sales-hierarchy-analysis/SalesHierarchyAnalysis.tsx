@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 import { ChartTitleFlagBadge } from "@/components/ui/ChartTitleFlagBadge";
@@ -8,20 +8,37 @@ import { useHierarchicalSales } from "@/hooks/useSalesAnalyses";
 import { useFilterStore } from "@/store/filterStore";
 import { TreeItem } from "./components/TreeItem";
 import AnalyticsLoader from "@/components/ui/analytics-loader";
+import type { HierarchicalSalesParams } from "@/api/sales-analyses";
+
+// ─── Local types ──────────────────────────────────────────────────────────────
 
 interface TreeNode {
-  id: string;
-  label: string;
-  value: number; // sales
-  profit: number;
+  id:     string;
+  label:  string;
+  value:  number; // aggregated sales
+  profit: number; // aggregated profit
 }
 
 type AtLevel = "branch" | "group1" | "group2" | "group3" | "product";
 
 interface SelectedLevel {
-  at: AtLevel;
+  at:   AtLevel;
   node: TreeNode;
 }
+
+// The API returns one row per entity at year level, but one row per
+// (entity × month) when split_by_period=true.  We type the superset.
+interface RawRow {
+  id:     number;
+  code?:  string | number;
+  name:   string;
+  sales:  number;
+  profit: number;
+  year?:  number;
+  month?: number;
+}
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const AT_LEVELS: AtLevel[] = [
   "branch",
@@ -32,16 +49,14 @@ const AT_LEVELS: AtLevel[] = [
 ];
 
 const HIERARCHY_TITLES: Record<AtLevel, string> = {
-  branch: "الفرع",
-  group1: "المجموعة الأولى",
-  group2: "المجموعة الثانية",
-  group3: "المجموعة الثالثة",
+  branch:  "الفرع",
+  group1:  "المجموعة الأولى",
+  group2:  "المجموعة الثانية",
+  group3:  "المجموعة الثالثة",
   product: "المنتج",
 };
 
-function secondarySalesMetric(node: TreeNode): number {
-  return node.profit ?? 0;
-}
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const normalizeSelections = (values: string[]) =>
   values.filter((v) => v && v !== "all");
@@ -51,37 +66,60 @@ const toInt = (s: string): number | undefined => {
   return Number.isNaN(n) || s === "" ? undefined : n;
 };
 
-function ColumnSkeleton() {
-  return (
-    <div className="space-y-1">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div
-          key={i}
-          className="rounded-md p-2 animate-pulse"
-          style={{ background: "var(--bg-elevated)", height: 72 }}
-        />
-      ))}
-    </div>
-  );
+/**
+ * When split_by_period=true the API emits one row per (entity × month).
+ * Collapse them into a single TreeNode per entity by summing sales+profit.
+ */
+function aggregateRows(rows: RawRow[]): TreeNode[] {
+  const map = new Map<
+    string,
+    { id: string; label: string; sales: number; profit: number }
+  >();
+  for (const row of rows) {
+    const key = String(row.id);
+    const hit = map.get(key);
+    if (hit) {
+      hit.sales  += row.sales;
+      hit.profit += row.profit;
+    } else {
+      map.set(key, {
+        id:     key,
+        label:  row.name,
+        sales:  row.sales,
+        profit: row.profit,
+      });
+    }
+  }
+  return Array.from(map.values()).map((e) => ({
+    id:     e.id,
+    label:  e.label,
+    value:  e.sales,
+    profit: e.profit,
+  }));
 }
 
-// ─── Column ───────────────────────────────────────────────────────────────────
+// ─── Per-column filter shape ──────────────────────────────────────────────────
 
-interface ColumnProps {
-  at: AtLevel;
-  years: number[];
-  level: "year" | "quarter" | "month";
-  period?: number[];
-  branchIds?: string[];
-  regionIds?: string[];
-  group1Ids?: string[];
-  group2Ids?: string[];
-  group3Ids?: string[];
+interface ColFilterParams {
+  branchIds?:   string[];
+  regionIds?:   string[];
+  group1Ids?:   string[];
+  group2Ids?:   string[];
+  group3Ids?:   string[];
   agreementId?: string;
+}
+
+// ─── HierarchyColumn ─────────────────────────────────────────────────────────
+
+interface ColumnProps extends ColFilterParams {
+  at:              AtLevel;
+  years:           number[];
+  level:           "year" | "quarter" | "month";
+  period:          number[] | undefined;
   selectedNodeId?: string;
-  onSelect: (node: TreeNode) => void;
-  onDeselect: () => void;
-  colIdx: number;
+  onSelect:        (node: TreeNode) => void;
+  onDeselect:      () => void;
+  colIdx:          number;
 }
 
 function HierarchyColumn({
@@ -100,44 +138,60 @@ function HierarchyColumn({
   onDeselect,
   colIdx,
 }: ColumnProps) {
+  // For month/quarter levels the period array must be present and non-empty,
+  // otherwise the API returns nothing useful.
   const enabled =
-    years.length > 0 && (level !== "month" || (period ?? []).length > 0);
+    years.length > 0 &&
+    (level === "year" || (period !== undefined && period.length > 0));
 
-  const params = {
+  // split_by_period=true is required for month/quarter so the API returns
+  // per-period rows that we then aggregate into one bar per entity.
+  const splitByPeriod = level === "month" || level === "quarter";
+
+  // Build the params object that matches HierarchicalSalesParams exactly.
+  const params: HierarchicalSalesParams = {
     at,
     level,
     years,
-    ...(period?.length ? { period } : {}),
-    ...(branchIds?.length ? { branchIds } : {}),
-    ...(regionIds?.length ? { regionIds } : {}),
-    ...(group1Ids?.length ? { group1Ids } : {}),
-    ...(group2Ids?.length ? { group2Ids } : {}),
-    ...(group3Ids?.length ? { group3Ids } : {}),
-    ...(agreementId ? { agreementId } : {}),
-    splitByPeriod: false,
+    splitByPeriod,
+    // Only include period when it has values; omitting it for year-level
+    // avoids sending ?period= which some backends treat as period=0.
+    ...(period?.length    ? { period }      : {}),
+    ...(branchIds?.length ? { branchIds }   : {}),
+    ...(regionIds?.length ? { regionIds }   : {}),
+    ...(group1Ids?.length ? { group1Ids }   : {}),
+    ...(group2Ids?.length ? { group2Ids }   : {}),
+    ...(group3Ids?.length ? { group3Ids }   : {}),
+    ...(agreementId       ? { agreementId } : {}),
   };
+
 
   const { data, isFetching, isError } = useHierarchicalSales(params, {
     enabled,
-    staleTime: 60_000,
-    gcTime: 5 * 60_000,
+    staleTime:            5 * 60_000,
+    gcTime:              10 * 60_000,
     refetchOnWindowFocus: false,
+    // Keep previous (stale) data visible while a new fetch is in flight so the
+    // column doesn't flash blank when filters change.
+    placeholderData: (prev: any) => prev,
   });
 
-  const nodes: TreeNode[] = React.useMemo(() => {
+  // Build display nodes.  For split_by_period responses each entity appears
+  // once per month — collapse them.  For year responses each entity appears
+  // once already.
+  const nodes: TreeNode[] = useMemo(() => {
     if (!data?.data?.length) return [];
-    return data.data.map((item) => ({
-      id: String(item.id),
-      label: item.name,
-      value: item.sales,
-      profit: item.profit,
+    const rows = data.data as RawRow[];
+    return splitByPeriod ? aggregateRows(rows) : rows.map((r) => ({
+      id:     String(r.id),
+      label:  r.name,
+      value:  r.sales,
+      profit: r.profit,
     }));
-  }, [data]);
+  }, [data, splitByPeriod]);
 
-  const maxVal = nodes.length ? Math.max(...nodes.map((n) => n.value)) : 1;
-  const maxSecVal = nodes.length
-    ? Math.max(1, ...nodes.map(secondarySalesMetric))
-    : 1;
+  const maxVal    = nodes.length ? Math.max(...nodes.map((n) => n.value))          : 1;
+  const maxSecVal = nodes.length ? Math.max(1, ...nodes.map((n) => n.profit ?? 0)) : 1;
 
   return (
     <motion.div
@@ -147,7 +201,7 @@ function HierarchyColumn({
       className="shrink-0 self-stretch flex flex-col"
       style={{ minWidth: "160px", maxWidth: "160px" }}
     >
-      {/* Header */}
+      {/* Column header */}
       <div className="flex items-center justify-between mb-2 px-1">
         <span
           className="text-[10px] font-semibold"
@@ -166,49 +220,40 @@ function HierarchyColumn({
         )}
       </div>
 
-      {/* Body */}
+      {/* Column body */}
       <div
         className="overflow-y-auto flex-1 min-h-0 hide-scrollbar"
         style={{
-          maxHeight: "650px",
-          paddingRight: "2px",
-          scrollbarWidth: "none", // Firefox
-          msOverflowStyle: "none", // IE
+          maxHeight:        "650px",
+          paddingRight:     "2px",
+          scrollbarWidth:   "none",
+          msOverflowStyle:  "none",
         }}
       >
-        {isFetching && (
+        {/* Spinner only on initial load — stale data stays visible on refetch */}
+        {isFetching && !data && (
           <AnalyticsLoader variant="compact" title="جاري التحميل" />
         )}
 
         {!isFetching && isError && (
-          <p
-            className="text-[11px] text-center py-6"
-            style={{ color: "var(--accent-red)" }}
-          >
+          <p className="text-[11px] text-center py-6" style={{ color: "var(--accent-red)" }}>
             تعذر تحميل البيانات
           </p>
         )}
 
-        {!isFetching && !isError && enabled && nodes.length === 0 && (
-          <p
-            className="text-[11px] text-center py-6"
-            style={{ color: "var(--text-muted)" }}
-          >
-            لا توجد بيانات
-          </p>
-        )}
-
         {!enabled && !isFetching && (
-          <p
-            className="text-[11px] text-center py-6"
-            style={{ color: "var(--text-muted)" }}
-          >
+          <p className="text-[11px] text-center py-6" style={{ color: "var(--text-muted)" }}>
             يرجى تحديد سنة
           </p>
         )}
 
-        {!isFetching &&
-          !isError &&
+        {!isFetching && !isError && enabled && nodes.length === 0 && (
+          <p className="text-[11px] text-center py-6" style={{ color: "var(--text-muted)" }}>
+            لا توجد بيانات
+          </p>
+        )}
+
+        {!isError &&
           nodes.map((node) => {
             const isSel = selectedNodeId === node.id;
             return (
@@ -228,154 +273,184 @@ function HierarchyColumn({
   );
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
+// ─── SalesHierarchyAnalysis ───────────────────────────────────────────────────
 
 export default function SalesHierarchyAnalysis() {
   const {
-    year: storeYear,
-    month: storeMonth,
-    quarter: storeQuarter,
+    year:           storeYear,
+    month:          storeMonth,
+    quarter:        storeQuarter,
     activeBranches,
     region,
     productCategory,
     subcategory,
-    product: storeProduct,
+    product:        storeProduct,
     agreement,
   } = useFilterStore();
 
-  // Standard level derivation
-  const yearNum = toInt(storeYear);
-  const monthNum = toInt(storeMonth);
+  // ── Time dimension ──────────────────────────────────────────────────────────
+  //
+  // GlobalFilterBar sets year/month/quarter in the store by calling
+  // deriveDateFilters(dateFrom, dateTo) whenever the local dateFrom state
+  // changes.  For the "month" quick-period chip on the sales page it sets:
+  //   year    = "2026"
+  //   month   = "05"   ← the calendar month (1-12)
+  //   quarter = "2"    ← derived from the same date, also set
+  //   day     = "01"
+  //
+  // Priority: month > quarter > year.  We check month first so that when both
+  // month and quarter are set (which always happens), month wins.
+
+  const yearNum    = toInt(storeYear);
+  const monthNum   = toInt(storeMonth);
   const quarterNum = toInt(storeQuarter);
 
   const level: "year" | "quarter" | "month" =
-    monthNum !== undefined
-      ? "month"
-      : quarterNum !== undefined
-        ? "quarter"
-        : "year";
+    monthNum   !== undefined ? "month"   :
+    quarterNum !== undefined ? "quarter" :
+                               "year";
 
-  const years = yearNum !== undefined ? [yearNum] : [];
-  const period =
-    level === "month" && monthNum !== undefined
-      ? [monthNum]
-      : level === "quarter" && quarterNum !== undefined
-        ? [quarterNum]
-        : undefined;
+  // years — single-element array; empty disables all queries.
+  const years: number[] = yearNum !== undefined ? [yearNum] : [];
 
-  // Store-level filters — string[] throughout, matching HierarchicalSalesParams
-  const storeBranchIds = normalizeSelections(activeBranches);
-  const storeRegionIds = normalizeSelections(region);
-  const storeAgreementId = normalizeSelections(agreement)[0];
-  const storeG1Ids = normalizeSelections(productCategory);
-  const storeG2Ids = normalizeSelections(subcategory);
-  const storeG3Ids = normalizeSelections(storeProduct);
+  // period — calendar months (1-12) for month level, quarters (1-4) for
+  // quarter level, undefined for year level.
+  //
+  // API contract: "For level=month, period must list one or more calendar
+  // months 1-12 (comma-separated)."
+  // Example URL: ?years=2026&at=branch&level=month&split_by_period=true&period=5
+  const period: number[] | undefined =
+    level === "month"   && monthNum   !== undefined ? [monthNum]   :
+    level === "quarter" && quarterNum !== undefined ? [quarterNum] :
+    undefined;
 
-  // ── Drill-down path ────────────────────────────────────────────────────────
+  // ── Store-level entity filters ──────────────────────────────────────────────
+  const storeBranchIds   = normalizeSelections(activeBranches);
+  const storeRegionIds   = normalizeSelections(region);
+  const storeG1Ids       = normalizeSelections(productCategory);
+  const storeG2Ids       = normalizeSelections(subcategory);
+  const storeG3Ids       = normalizeSelections(storeProduct);
+  // agreement holds string IDs; take the first selected one
+  const storeAgreementId = normalizeSelections(agreement)[0] as string | undefined;
+
+  // ── Drill-down path ─────────────────────────────────────────────────────────
   const [path, setPath] = useState<SelectedLevel[]>([]);
 
-  // Stable stringified deps to avoid infinite loops
+  // Reset path whenever the time dimension or top-level entity filters change
+  // to avoid stale column selections pointing to nodes outside the new data set.
   const branchKey = storeBranchIds.join(",");
   const regionKey = storeRegionIds.join(",");
-  const g1Key = storeG1Ids.join(",");
+  const g1Key     = storeG1Ids.join(",");
 
   useEffect(() => {
     setPath([]);
   }, [storeYear, storeMonth, storeQuarter, branchKey, regionKey, g1Key]);
 
+  // Scroll back to start when a new column opens
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollLeft = 0;
   }, [path.length]);
 
-  // Columns: always branch, +1 per path entry up to max depth
+  // ── Visible columns ─────────────────────────────────────────────────────────
   const visibleColumns: AtLevel[] = [AT_LEVELS[0]];
   for (let i = 0; i < path.length && i + 1 < AT_LEVELS.length; i++) {
     visibleColumns.push(AT_LEVELS[i + 1]);
   }
 
-  const getColParams = (colIdx: number) => {
+  // ── Per-column entity filter params ────────────────────────────────────────
+  // years / level / period are identical across all columns and are passed as
+  // direct props.  This function handles only the entity-scoped filters that
+  // differ per column based on the drill-down path.
+  const getColParams = (colIdx: number): ColFilterParams => {
     const selBranchId = path[0]?.node.id;
-    const selG1Id = path[1]?.node.id;
-    const selG2Id = path[2]?.node.id;
-    const selG3Id = path[3]?.node.id;
+    const selG1Id     = path[1]?.node.id;
+    const selG2Id     = path[2]?.node.id;
+    const selG3Id     = path[3]?.node.id;
 
+    const commonRegion    = storeRegionIds.length ? storeRegionIds : undefined;
+    const commonAgreement = storeAgreementId;
+
+    // col 0 — Branches ────────────────────────────────────────────────────────
     if (colIdx === 0) {
       return {
-        branchIds: storeBranchIds.length ? storeBranchIds : undefined,
-        regionIds: storeRegionIds.length ? storeRegionIds : undefined,
-        group1Ids: undefined as string[] | undefined,
-        group2Ids: undefined as string[] | undefined,
-        group3Ids: undefined as string[] | undefined,
-        agreementId: storeAgreementId,
+        branchIds:   storeBranchIds.length ? storeBranchIds : undefined,
+        regionIds:   commonRegion,
+        group1Ids:   undefined,
+        group2Ids:   undefined,
+        group3Ids:   undefined,
+        agreementId: commonAgreement,
       };
     }
 
-    const effectiveBranchIds: string[] = selBranchId
-      ? [selBranchId]
-      : storeBranchIds;
+    const effectiveBranchIds =
+      selBranchId
+        ? [selBranchId]
+        : storeBranchIds.length ? storeBranchIds : undefined;
 
+    // col 1 — Group 1 ─────────────────────────────────────────────────────────
     if (colIdx === 1) {
       return {
-        branchIds: effectiveBranchIds.length ? effectiveBranchIds : undefined,
-        regionIds: storeRegionIds.length ? storeRegionIds : undefined,
-        group1Ids: storeG1Ids.length ? storeG1Ids : undefined,
-        group2Ids: undefined as string[] | undefined,
-        group3Ids: undefined as string[] | undefined,
-        agreementId: storeAgreementId,
+        branchIds:   effectiveBranchIds,
+        regionIds:   commonRegion,
+        group1Ids:   storeG1Ids.length ? storeG1Ids : undefined,
+        group2Ids:   undefined,
+        group3Ids:   undefined,
+        agreementId: commonAgreement,
       };
     }
 
-    const effectiveG1Ids = selG1Id
-      ? [selG1Id]
-      : storeG1Ids.length
-        ? storeG1Ids
-        : undefined;
+    const effectiveG1Ids =
+      selG1Id
+        ? [selG1Id]
+        : storeG1Ids.length ? storeG1Ids : undefined;
 
+    // col 2 — Group 2 ─────────────────────────────────────────────────────────
     if (colIdx === 2) {
       return {
-        branchIds: effectiveBranchIds.length ? effectiveBranchIds : undefined,
-        regionIds: storeRegionIds.length ? storeRegionIds : undefined,
-        group1Ids: effectiveG1Ids,
-        group2Ids: storeG2Ids.length ? storeG2Ids : undefined,
-        group3Ids: undefined as string[] | undefined,
-        agreementId: storeAgreementId,
+        branchIds:   effectiveBranchIds,
+        regionIds:   commonRegion,
+        group1Ids:   effectiveG1Ids,
+        group2Ids:   storeG2Ids.length ? storeG2Ids : undefined,
+        group3Ids:   undefined,
+        agreementId: commonAgreement,
       };
     }
 
-    const effectiveG2Ids = selG2Id
-      ? [selG2Id]
-      : storeG2Ids.length
-        ? storeG2Ids
-        : undefined;
+    const effectiveG2Ids =
+      selG2Id
+        ? [selG2Id]
+        : storeG2Ids.length ? storeG2Ids : undefined;
 
+    // col 3 — Group 3 ─────────────────────────────────────────────────────────
     if (colIdx === 3) {
       return {
-        branchIds: effectiveBranchIds.length ? effectiveBranchIds : undefined,
-        regionIds: storeRegionIds.length ? storeRegionIds : undefined,
-        group1Ids: effectiveG1Ids,
-        group2Ids: effectiveG2Ids,
-        group3Ids: storeG3Ids.length ? storeG3Ids : undefined,
-        agreementId: storeAgreementId,
+        branchIds:   effectiveBranchIds,
+        regionIds:   commonRegion,
+        group1Ids:   effectiveG1Ids,
+        group2Ids:   effectiveG2Ids,
+        group3Ids:   storeG3Ids.length ? storeG3Ids : undefined,
+        agreementId: commonAgreement,
       };
     }
 
-    const effectiveG3Ids = selG3Id
-      ? [selG3Id]
-      : storeG3Ids.length
-        ? storeG3Ids
-        : undefined;
+    // col 4 — Product ─────────────────────────────────────────────────────────
+    const effectiveG3Ids =
+      selG3Id
+        ? [selG3Id]
+        : storeG3Ids.length ? storeG3Ids : undefined;
 
     return {
-      branchIds: effectiveBranchIds.length ? effectiveBranchIds : undefined,
-      regionIds: storeRegionIds.length ? storeRegionIds : undefined,
-      group1Ids: effectiveG1Ids,
-      group2Ids: effectiveG2Ids,
-      group3Ids: effectiveG3Ids,
-      agreementId: storeAgreementId,
+      branchIds:   effectiveBranchIds,
+      regionIds:   commonRegion,
+      group1Ids:   effectiveG1Ids,
+      group2Ids:   effectiveG2Ids,
+      group3Ids:   effectiveG3Ids,
+      agreementId: commonAgreement,
     };
   };
 
+  // ── Handlers ────────────────────────────────────────────────────────────────
   const handleSelect = (colIdx: number, node: TreeNode) => {
     setPath((prev) => [
       ...prev.slice(0, colIdx),
@@ -387,6 +462,7 @@ export default function SalesHierarchyAnalysis() {
     setPath((prev) => prev.slice(0, colIdx));
   };
 
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="glass-panel overflow-hidden">
       {/* Header */}
@@ -413,6 +489,7 @@ export default function SalesHierarchyAnalysis() {
         </p>
       </div>
 
+      {/* Breadcrumb */}
       <AnimatePresence>
         {path.length > 0 && (
           <motion.div
@@ -426,7 +503,6 @@ export default function SalesHierarchyAnalysis() {
               className="px-5 py-2.5 flex items-center gap-1 flex-nowrap overflow-x-auto hide-scrollbar"
               dir="rtl"
             >
-              {/* Root */}
               <button
                 onClick={() => setPath([])}
                 className="flex items-center gap-1 shrink-0 px-2 py-1 rounded-md hover:opacity-70 transition-opacity"
@@ -452,7 +528,6 @@ export default function SalesHierarchyAnalysis() {
                 const isLast = i === path.length - 1;
                 return (
                   <React.Fragment key={lvl.node.id}>
-                    {/* Separator */}
                     <svg
                       width="10"
                       height="10"
@@ -463,11 +538,7 @@ export default function SalesHierarchyAnalysis() {
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       className="shrink-0 rotate-180"
-                      style={{
-                        color: "var(--text-muted)",
-                        opacity: 0.4,
-                        flexShrink: 0,
-                      }}
+                      style={{ color: "var(--text-muted)", opacity: 0.4 }}
                     >
                       <polyline points="9 18 15 12 9 6" />
                     </svg>
@@ -477,16 +548,12 @@ export default function SalesHierarchyAnalysis() {
                         className="inline-flex items-center gap-1.5 shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-semibold"
                         style={{
                           background: "rgba(37,99,235,0.12)",
-                          border: "1px solid rgba(37,99,235,0.3)",
-                          color: "var(--accent-blue)",
-                          maxWidth: "160px",
+                          border:     "1px solid rgba(37,99,235,0.3)",
+                          color:      "var(--accent-blue)",
+                          maxWidth:   "160px",
                         }}
                       >
-                        <span
-                          className="truncate"
-                          title={lvl.node.label}
-                          style={{ minWidth: 0 }}
-                        >
+                        <span className="truncate" title={lvl.node.label} style={{ minWidth: 0 }}>
                           {lvl.node.label}
                         </span>
                         <button
@@ -524,17 +591,18 @@ export default function SalesHierarchyAnalysis() {
       <div
         ref={scrollRef}
         className="overflow-x-auto p-5"
-        style={{
-          scrollbarWidth: "none",
-          msOverflowStyle: "none",
-        }}
+        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
       >
         <div className="flex w-max me-auto gap-2 items-stretch" dir="ltr">
           {visibleColumns.map((at, colIdx) => {
             const p = getColParams(colIdx);
             return (
               <HierarchyColumn
-                key={`${at}-${colIdx}`}
+                // Key encodes every param that must cause a remount.
+                // Changing level or period must produce a new column instance
+                // so stale placeholderData from a different time slice is
+                // never shown.
+                key={`${at}-${colIdx}-${level}-${period?.join(",") ?? "yr"}`}
                 at={at}
                 years={years}
                 level={level}

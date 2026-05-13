@@ -13,12 +13,10 @@ export function DateFilterDropdown({
   setDateFrom,
   setDateTo,
   quickPeriodOptions = QUICK_PERIODS,
-  /** صفحة /sales: وضع «فترة محددة» يستخدم حقول شهر/سنة. */
   useMonthRangePickers = false,
-  /** عند اختيار فترة سريعة: تعبئة من/إلى (مثلاً صفحة المبيعات). */
   fillQuickPeriodDates,
-  /** عند الفترة السريعة = شهر فقط (فروع): «فترة محددة» إما يوم أو شهر. */
   rangeGranularity = "month",
+  onApply,
 }: {
   activePeriod: string;
   setActivePeriod: (v: string) => void;
@@ -30,11 +28,26 @@ export function DateFilterDropdown({
   useMonthRangePickers?: boolean;
   fillQuickPeriodDates?: (value: string) => { from: string; to: string } | null;
   rangeGranularity?: "month" | "day";
+  onApply?: (from: string, to: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"quick" | "range">("quick");
+
+  // ── draft state: only written to parent when تطبيق is pressed ──────────────
+  const [draftFrom, setDraftFrom] = useState("");
+  const [draftTo, setDraftTo] = useState("");
+
   const ref = useRef<HTMLDivElement>(null);
   useClickOutside(ref, () => setOpen(false));
+
+  // Sync drafts from current applied values every time the panel opens
+  const handleToggle = () => {
+    if (!open) {
+      setDraftFrom(dateFrom);
+      setDraftTo(dateTo);
+    }
+    setOpen((p) => !p);
+  };
 
   const label =
     mode === "range" && dateFrom
@@ -45,7 +58,7 @@ export function DateFilterDropdown({
   return (
     <div ref={ref} style={{ position: "relative" }}>
       <button
-        onClick={() => setOpen((p) => !p)}
+        onClick={handleToggle}
         className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all hover:scale-[1.02]"
         style={{
           background:
@@ -66,6 +79,7 @@ export function DateFilterDropdown({
           }}
         />
       </button>
+
       <AnimatePresence>
         {open && (
           <motion.div
@@ -107,8 +121,10 @@ export function DateFilterDropdown({
                 </button>
               ))}
             </div>
+
             <div style={{ padding: "8px" }}>
               {mode === "quick" ? (
+                /* ── Quick period buttons — exactly as original ── */
                 <div
                   style={{
                     display: "grid",
@@ -121,14 +137,21 @@ export function DateFilterDropdown({
                       key={p.value}
                       onClick={() => {
                         setActivePeriod(p.value);
+
                         const filled = fillQuickPeriodDates?.(p.value);
+
                         if (filled?.from && filled?.to) {
                           setDateFrom(filled.from);
                           setDateTo(filled.to);
+
+                          onApply?.(filled.from, filled.to);
                         } else {
                           setDateFrom("");
                           setDateTo("");
+
+                          onApply?.("", "");
                         }
+
                         setOpen(false);
                       }}
                       className="py-2 rounded-lg text-[11px] font-medium transition-all hover:scale-[1.02]"
@@ -149,14 +172,14 @@ export function DateFilterDropdown({
                   ))}
                 </div>
               ) : (
+                /* ── Custom range — inputs write to DRAFT only ── */
                 <div
                   style={{ display: "flex", flexDirection: "column", gap: 6 }}
                 >
                   {[
-                    { label: "من", val: dateFrom, set: setDateFrom },
-                    { label: "إلى", val: dateTo, set: setDateTo },
+                    { label: "من", val: draftFrom, set: setDraftFrom },
+                    { label: "إلى", val: draftTo, set: setDraftTo },
                   ].map((f, idx) => {
-                    // /branches: نطاق باليوم
                     if (rangeGranularity === "day") {
                       return (
                         <div key={f.label}>
@@ -189,72 +212,73 @@ export function DateFilterDropdown({
                       );
                     }
 
-                    // Default behavior: month/year only (no days)
-                    // This applies for /sales, /branches, and all other pages with custom date range
-                    {
-                      // Derive YYYY-MM for the month input from stored ISO date (if any)
-                      const ym =
-                        f.val && f.val.length >= 7 ? f.val.slice(0, 7) : "";
+                    // month/year picker
+                    const ym =
+                      f.val && f.val.length >= 7 ? f.val.slice(0, 7) : "";
 
-                      const handleMonthChange = (value: string) => {
-                        if (!value) {
-                          f.set("");
-                          return;
-                        }
-                        const [yearStr, monthStr] = value.split("-");
-                        const year = Number(yearStr);
-                        const month = Number(monthStr); // 1-12
-                        if (!year || !month) {
-                          f.set("");
-                          return;
-                        }
-                        if (idx === 0) {
-                          // from: first day of month
-                          f.set(`${yearStr}-${monthStr}-${"01"}`);
-                        } else {
-                          // to: last day of month
-                          const lastDay = new Date(year, month, 0).getDate();
-                          const dd = String(lastDay).padStart(2, "0");
-                          f.set(`${yearStr}-${monthStr}-${dd}`);
-                        }
-                      };
+                    const handleMonthChange = (value: string) => {
+                      if (!value) {
+                        f.set("");
+                        return;
+                      }
+                      const [yearStr, monthStr] = value.split("-");
+                      const year = Number(yearStr);
+                      const month = Number(monthStr);
+                      if (!year || !month) {
+                        f.set("");
+                        return;
+                      }
+                      if (idx === 0) {
+                        f.set(`${yearStr}-${monthStr}-01`);
+                      } else {
+                        const lastDay = new Date(year, month, 0).getDate();
+                        const dd = String(lastDay).padStart(2, "0");
+                        f.set(`${yearStr}-${monthStr}-${dd}`);
+                      }
+                    };
 
-                      return (
-                        <div key={f.label}>
-                          <label
-                            style={{
-                              fontSize: 9,
-                              color: "var(--text-muted)",
-                              display: "block",
-                              marginBottom: 3,
-                            }}
-                          >
-                            {f.label}
-                          </label>
-                          <input
-                            type="month"
-                            value={ym}
-                            onChange={(e) => handleMonthChange(e.target.value)}
-                            style={{
-                              width: "100%",
-                              padding: "5px 8px",
-                              borderRadius: 7,
-                              background: "var(--bg-elevated)",
-                              border: "1px solid var(--border-subtle)",
-                              color: "var(--text-primary)",
-                              fontSize: 11,
-                              outline: "none",
-                            }}
-                          />
-                        </div>
-                      );
-                    }
+                    return (
+                      <div key={f.label}>
+                        <label
+                          style={{
+                            fontSize: 9,
+                            color: "var(--text-muted)",
+                            display: "block",
+                            marginBottom: 3,
+                          }}
+                        >
+                          {f.label}
+                        </label>
+                        <input
+                          type="month"
+                          value={ym}
+                          onChange={(e) => handleMonthChange(e.target.value)}
+                          style={{
+                            width: "100%",
+                            padding: "5px 8px",
+                            borderRadius: 7,
+                            background: "var(--bg-elevated)",
+                            border: "1px solid var(--border-subtle)",
+                            color: "var(--text-primary)",
+                            fontSize: 11,
+                            outline: "none",
+                          }}
+                        />
+                      </div>
+                    );
                   })}
-                  {(dateFrom || dateTo) && (
+
+                  {/* تطبيق — only shown when at least one draft date is set */}
+                  {(draftFrom || draftTo) && (
                     <button
                       onClick={() => {
-                        // تطبيق نطاق التاريخ في المتجر
-                        useFilterStore.getState().setDateRange(dateFrom, dateTo);
+                        // 1. Commit drafts → parent state (this is what drives useEffects in GlobalFilterBar)
+                        setDateFrom(draftFrom);
+                        setDateTo(draftTo);
+                        // 2. Sync store + mark applied — exactly as original
+                        useFilterStore
+                          .getState()
+                          .setDateRange(draftFrom, draftTo);
                         useFilterStore.getState().applyDateRange();
                         setOpen(false);
                       }}

@@ -305,36 +305,109 @@ function SkeletonRows() {
   );
 }
 
+// ── Helper: build a full inclusive year array from a YYYY-MM-DD range ─────────
+//
+// deriveDateFilters() in GlobalFilterBar only extracts the FROM year and writes
+// it to store.year as a single string — the TO year is never stored separately.
+// So "2024-01 → 2026-12" ends up as year="2024", losing 2025 and 2026.
+//
+// Fix: read the raw dateRangeFrom / dateRangeTo strings (already in the store)
+// and derive the full inclusive array here, falling back to store.year when no
+// custom range is active (quick-period mode).
+function buildYearsArray(
+  year: string,
+  dateRangeFrom: string,
+  dateRangeTo: string,
+): number[] | undefined {
+  const fromYear = dateRangeFrom
+    ? Number(dateRangeFrom.split("-")[0])
+    : Number.NaN;
+  const toYear = dateRangeTo
+    ? Number(dateRangeTo.split("-")[0])
+    : Number.NaN;
+
+  if (!Number.isNaN(fromYear) && !Number.isNaN(toYear) && fromYear <= toYear) {
+    // Custom range: expand e.g. 2024→2026 into [2024, 2025, 2026]
+    return Array.from(
+      { length: toYear - fromYear + 1 },
+      (_, i) => fromYear + i,
+    );
+  }
+
+  // Quick-period / single-year fallback
+  const y = Number(year);
+  return year && !Number.isNaN(y) ? [y] : undefined;
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 
 const DetailedTimeBasedSalesAnalysis = () => {
-  const activeBranches = useFilterStore((s) => s.activeBranches);
-  const region = useFilterStore((s) => s.region);
+  const activeBranches  = useFilterStore((s) => s.activeBranches);
+  const region          = useFilterStore((s) => s.region);
   const productCategory = useFilterStore((s) => s.productCategory);
-  const subcategory = useFilterStore((s) => s.subcategory);
-  const agreement = useFilterStore((s) => s.agreement);
-  const year = useFilterStore((s) => s.year);
+  const subcategory     = useFilterStore((s) => s.subcategory);
+  // FIX 2: group3 is stored under the "product" key on the sales page
+  const group3          = useFilterStore((s) => s.product);
+  const agreement       = useFilterStore((s) => s.agreement);
+  const year            = useFilterStore((s) => s.year);
+  // FIX 5: month + day act as queryKey discriminators for same-year period changes
+  const month           = useFilterStore((s) => s.month);
+  const day             = useFilterStore((s) => s.day);
+  // NEW: read the raw date range so we can expand multi-year selections
+  const dateRangeFrom   = useFilterStore((s) => s.dateRangeFrom);
+  const dateRangeTo     = useFilterStore((s) => s.dateRangeTo);
 
   const params = useMemo(
     () => ({
-      years: year ? [Number(year)] : undefined,
-      branchIds: activeBranches.length > 0 ? activeBranches : undefined,
-      regionIds: region.length > 0 ? region : undefined,
-      group1Ids: productCategory.length > 0 ? productCategory : undefined,
-      group2Ids: subcategory.length > 0 ? subcategory : undefined,
-      agreementId: agreement.length === 1 ? agreement[0] : undefined,
+      // FIX (year range): derive the full inclusive array — "2024 → 2026"
+      // now correctly produces [2024, 2025, 2026] instead of just [2024].
+      years: buildYearsArray(year, dateRangeFrom, dateRangeTo),
+
+      branchIds:   activeBranches.length > 0  ? activeBranches  : undefined,
+      regionIds:   region.length > 0          ? region          : undefined,
+      group1Ids:   productCategory.length > 0 ? productCategory : undefined,
+      group2Ids:   subcategory.length > 0     ? subcategory     : undefined,
+      // FIX 2: pass group3 so the filter actually reaches the API
+      group3Ids:   group3.length > 0          ? group3          : undefined,
+      // FIX 3: pass first agreement whenever ≥1 selected (not only when === 1)
+      agreementId: agreement.length > 0       ? agreement[0]    : undefined,
+
+      // FIX 5: _month/_day are not sent to the API but change the queryKey so
+      // React Query refetches when the active period shifts within a year.
+      _month: month,
+      _day:   day,
     }),
-    [year, activeBranches, region, productCategory, subcategory, agreement],
+    [
+      year, dateRangeFrom, dateRangeTo,
+      month, day,
+      activeBranches,
+      region,
+      productCategory,
+      subcategory,
+      group3,
+      agreement,
+    ],
   );
 
   const {
     data: rawData,
     isLoading,
+    // FIX 4: isFetching is now consumed for a background-refresh indicator
     isFetching,
     isError,
-  } = useDetailedTimeSales(params, {
-    staleTime: 5 * 60 * 1000,
-  });
+  } = useDetailedTimeSales(
+    // Strip internal discriminator fields before sending to the API
+    {
+      years:       params.years,
+      branchIds:   params.branchIds,
+      regionIds:   params.regionIds,
+      group1Ids:   params.group1Ids,
+      group2Ids:   params.group2Ids,
+      group3Ids:   params.group3Ids,
+      agreementId: params.agreementId,
+    },
+    { staleTime: 5 * 60 * 1000 },
+  );
 
   const salesAnalysisData = useMemo<SalesAnalysisYear[]>(
     () => (rawData ? transformDetailedTimeSales(rawData) : []),
@@ -361,7 +434,7 @@ const DetailedTimeBasedSalesAnalysis = () => {
       });
     });
     return {
-      maxNet: Math.max(...allMetrics.map((m) => m.net)),
+      maxNet:      Math.max(...allMetrics.map((m) => m.net)),
       maxInvoices: Math.max(...allMetrics.map((m) => m.invoices)),
     };
   }, [salesAnalysisData]);
@@ -396,6 +469,20 @@ const DetailedTimeBasedSalesAnalysis = () => {
       }
     >
       <AnalyticsTable headers={headers} minWidth={980}>
+        {/* ── FIX 4: background-refresh indicator while stale data is shown */}
+        {isFetching && !isLoading && (
+          <tr>
+            <td
+              colSpan={7}
+              style={{ padding: "4px 0", textAlign: "center" }}
+            >
+              <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
+                جاري التحديث…
+              </span>
+            </td>
+          </tr>
+        )}
+
         {isLoading && salesAnalysisData.length === 0 && (
           <tr>
             <td colSpan={7}>
@@ -406,6 +493,7 @@ const DetailedTimeBasedSalesAnalysis = () => {
             </td>
           </tr>
         )}
+
         {isError && !isLoading && (
           <tr>
             <td
@@ -439,7 +527,7 @@ const DetailedTimeBasedSalesAnalysis = () => {
         )}
 
         {salesAnalysisData.map((year) => {
-          const yearMetrics = getRollupMetrics(getYearMonths(year));
+          const yearMetrics  = getRollupMetrics(getYearMonths(year));
           const isYearExpanded = expandedYears.has(year.year);
 
           return (
@@ -463,10 +551,8 @@ const DetailedTimeBasedSalesAnalysis = () => {
 
               {isYearExpanded &&
                 year.quarters.map((quarter) => {
-                  const quarterKey = `${year.year}-${quarter.id}`;
-                  const quarterMetrics = getRollupMetrics(
-                    getQuarterMonths(quarter),
-                  );
+                  const quarterKey     = `${year.year}-${quarter.id}`;
+                  const quarterMetrics = getRollupMetrics(getQuarterMonths(quarter));
                   const isQuarterExpanded = expandedQuarters.has(quarterKey);
 
                   return (
