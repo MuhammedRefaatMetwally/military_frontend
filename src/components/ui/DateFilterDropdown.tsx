@@ -16,6 +16,7 @@ export function DateFilterDropdown({
   useMonthRangePickers = false,
   fillQuickPeriodDates,
   rangeGranularity = "month",
+  onApply,
 }: {
   activePeriod: string;
   setActivePeriod: (v: string) => void;
@@ -27,13 +28,14 @@ export function DateFilterDropdown({
   useMonthRangePickers?: boolean;
   fillQuickPeriodDates?: (value: string) => { from: string; to: string } | null;
   rangeGranularity?: "month" | "day";
+  onApply?: (from: string, to: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"quick" | "range">("quick");
 
   // ── draft state: only written to parent when تطبيق is pressed ──────────────
   const [draftFrom, setDraftFrom] = useState("");
-  const [draftTo,   setDraftTo]   = useState("");
+  const [draftTo, setDraftTo] = useState("");
 
   const ref = useRef<HTMLDivElement>(null);
   useClickOutside(ref, () => setOpen(false));
@@ -135,14 +137,21 @@ export function DateFilterDropdown({
                       key={p.value}
                       onClick={() => {
                         setActivePeriod(p.value);
+
                         const filled = fillQuickPeriodDates?.(p.value);
+
                         if (filled?.from && filled?.to) {
                           setDateFrom(filled.from);
                           setDateTo(filled.to);
+
+                          onApply?.(filled.from, filled.to);
                         } else {
                           setDateFrom("");
                           setDateTo("");
+
+                          onApply?.("", "");
                         }
+
                         setOpen(false);
                       }}
                       className="py-2 rounded-lg text-[11px] font-medium transition-all hover:scale-[1.02]"
@@ -169,7 +178,7 @@ export function DateFilterDropdown({
                 >
                   {[
                     { label: "من", val: draftFrom, set: setDraftFrom },
-                    { label: "إلى", val: draftTo,   set: setDraftTo   },
+                    { label: "إلى", val: draftTo, set: setDraftTo },
                   ].map((f, idx) => {
                     if (rangeGranularity === "day") {
                       return (
@@ -208,11 +217,17 @@ export function DateFilterDropdown({
                       f.val && f.val.length >= 7 ? f.val.slice(0, 7) : "";
 
                     const handleMonthChange = (value: string) => {
-                      if (!value) { f.set(""); return; }
+                      if (!value) {
+                        f.set("");
+                        return;
+                      }
                       const [yearStr, monthStr] = value.split("-");
-                      const year  = Number(yearStr);
+                      const year = Number(yearStr);
                       const month = Number(monthStr);
-                      if (!year || !month) { f.set(""); return; }
+                      if (!year || !month) {
+                        f.set("");
+                        return;
+                      }
                       if (idx === 0) {
                         f.set(`${yearStr}-${monthStr}-01`);
                       } else {
@@ -261,7 +276,9 @@ export function DateFilterDropdown({
                         setDateFrom(draftFrom);
                         setDateTo(draftTo);
                         // 2. Sync store + mark applied — exactly as original
-                        useFilterStore.getState().setDateRange(draftFrom, draftTo);
+                        useFilterStore
+                          .getState()
+                          .setDateRange(draftFrom, draftTo);
                         useFilterStore.getState().applyDateRange();
                         setOpen(false);
                       }}

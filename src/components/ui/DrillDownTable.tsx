@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import {
   ChevronDown,
   ChevronLeft,
@@ -22,6 +22,9 @@ import {
 } from "@/api/sales-analyses";
 import { useDetailedSalesBreakdown } from "@/hooks/useSalesAnalyses";
 import { fmt, fmtFull } from "@/api/utils";
+import { useFilterStore } from "@/store/filterStore";
+
+// ── Types ──────────────────────────────────────────────────────────────────────
 
 interface RowData {
   id: string;
@@ -43,6 +46,8 @@ interface RowData {
   childrenLoaded?: boolean;
   childrenError?: boolean;
 }
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
 
 function apiRecordToRowData(
   record: SalesBreakdownRecord,
@@ -67,35 +72,60 @@ function apiRecordToRowData(
   };
 }
 
+/**
+ * Build the years array from the filter store values.
+ *
+ * Priority:
+ *  1. If a dateRangeFrom / dateRangeTo pair is available → expand into every
+ *     year in the inclusive range (e.g. "2024-01" → "2026-12" → [2024,2025,2026]).
+ *  2. Else if a single `year` string is set → [year].
+ *  3. Fallback: current calendar year, so the API never receives an undefined
+ *     years param and returns the entire history.
+ */
+function buildYearsArray(
+  year: string,
+  dateRangeFrom: string,
+  dateRangeTo: string,
+): number[] {
+  const fromYear = dateRangeFrom ? Number(dateRangeFrom.split("-")[0]) : NaN;
+  const toYear   = dateRangeTo   ? Number(dateRangeTo.split("-")[0])   : NaN;
+
+  if (!isNaN(fromYear) && !isNaN(toYear) && fromYear <= toYear) {
+    return Array.from({ length: toYear - fromYear + 1 }, (_, i) => fromYear + i);
+  }
+
+  const y = Number(year);
+  if (year && !isNaN(y)) return [y];
+
+  // Hard fallback — never send undefined years to the API.
+  return [new Date().getFullYear()];
+}
+
+// ── Column definitions ─────────────────────────────────────────────────────────
+
 const COLUMNS = [
-  { key: "grossSales", label: "إجمالي المبيعات", labelEn: "Gross Sales" },
-  { key: "netSales", label: "صافي المبيعات", labelEn: "Net Sales" },
-  { key: "invoiceCount", label: "عدد الفواتير", labelEn: "Invoice count" },
-  { key: "discountValue", label: "قيمة الخصم", labelEn: "Discount Value" },
-  { key: "discountPct", label: "نسبة الخصم", labelEn: "Discount %" },
-  { key: "returns", label: "المرتجع", labelEn: "Returns" },
-  {
-    key: "returnedItemCount",
-    label: "عدد المواد المرتجعة",
-    labelEn: "Returned SKUs",
-  },
-  { key: "productVolume", label: "الكمية", labelEn: "Quantity" },
-  { key: "itemCount", label: "عدد المواد", labelEn: "SKU Count" },
-  {
-    key: "soldMaterialsValue",
-    label: "سعر المواد المباعة",
-    labelEn: "Sold Materials Value",
-  },
-  { key: "avgPrice", label: "متوسط السعر", labelEn: "Avg. Price" },
-  { key: "avgDiscRate", label: "متوسط نسبة الخصم", labelEn: "Avg. Discount %" },
+  { key: "grossSales",         label: "إجمالي المبيعات",      labelEn: "Gross Sales" },
+  { key: "netSales",           label: "صافي المبيعات",         labelEn: "Net Sales" },
+  { key: "invoiceCount",       label: "عدد الفواتير",          labelEn: "Invoice count" },
+  { key: "discountValue",      label: "قيمة الخصم",            labelEn: "Discount Value" },
+  { key: "discountPct",        label: "نسبة الخصم",            labelEn: "Discount %" },
+  { key: "returns",            label: "المرتجع",               labelEn: "Returns" },
+  { key: "returnedItemCount",  label: "عدد المواد المرتجعة",   labelEn: "Returned SKUs" },
+  { key: "productVolume",      label: "الكمية",                labelEn: "Quantity" },
+  { key: "itemCount",          label: "عدد المواد",            labelEn: "SKU Count" },
+  { key: "soldMaterialsValue", label: "سعر المواد المباعة",    labelEn: "Sold Materials Value" },
+  { key: "avgPrice",           label: "متوسط السعر",           labelEn: "Avg. Price" },
+  { key: "avgDiscRate",        label: "متوسط نسبة الخصم",      labelEn: "Avg. Discount %" },
 ] as const;
 
+// ── Returns colour tiers ───────────────────────────────────────────────────────
+
 const RETURNS_TIERS = [
-  { maxExclusive: 1, color: "#0a0a0a", labelAr: "أقل من ١٪" },
-  { maxExclusive: 3, color: "#ea580c", labelAr: "١٪ – أقل من ٣٪" },
-  { maxExclusive: 5, color: "#fb7185", labelAr: "٣٪ – أقل من ٥٪" },
-  { maxExclusive: 10, color: "#dc2626", labelAr: "٥٪ – أقل من ١٠٪" },
-  { maxExclusive: Infinity, color: "#7f1d1d", labelAr: "١٠٪ فأكثر" },
+  { maxExclusive: 1,        color: "#0a0a0a",  labelAr: "أقل من ١٪" },
+  { maxExclusive: 3,        color: "#ea580c",  labelAr: "١٪ – أقل من ٣٪" },
+  { maxExclusive: 5,        color: "#fb7185",  labelAr: "٣٪ – أقل من ٥٪" },
+  { maxExclusive: 10,       color: "#dc2626",  labelAr: "٥٪ – أقل من ١٠٪" },
+  { maxExclusive: Infinity, color: "#7f1d1d",  labelAr: "١٠٪ فأكثر" },
 ] as const;
 
 function returnsTextColor(grossSales: number, returns: number): string {
@@ -107,7 +137,7 @@ function returnsTextColor(grossSales: number, returns: number): string {
   return RETURNS_TIERS[RETURNS_TIERS.length - 1].color;
 }
 
-
+// ── Visual constants ───────────────────────────────────────────────────────────
 
 const LEVEL_TEXT_COLORS = [
   "var(--text-primary)",
@@ -139,22 +169,51 @@ const ROW_BG_CLOSED = [
   "transparent",
 ];
 
-interface DrillDownTableProps {
-  years?: string;
-  branch?: string;
-  region?: string;
+// ── Drill-down context passed down through recursive render ────────────────────
+
+interface DrillContext {
+  branchId?: string;
+  group1Id?: string;
+  group2Id?: string;
+  group3Id?: string;
 }
 
-export default function DrillDownTable({
-  years = "2026",
-  branch,
-  region,
-}: DrillDownTableProps) {
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [rowCache, setRowCache] = useState<Map<string, RowData>>(new Map());
-  const [loadingKeys, setLoadingKeys] = useState<Set<string>>(new Set());
-  const [errorKeys, setErrorKeys] = useState<Set<string>>(new Set());
+// ── Main component ─────────────────────────────────────────────────────────────
 
+export default function DrillDownTable() {
+  // Read every relevant global filter directly from the store.
+  const activeBranches  = useFilterStore((s) => s.activeBranches);
+  const region          = useFilterStore((s) => s.region);
+  const productCategory = useFilterStore((s) => s.productCategory); // group1
+  const subcategory     = useFilterStore((s) => s.subcategory);     // group2
+  const group3Filter    = useFilterStore((s) => s.product);          // group3
+  const agreement       = useFilterStore((s) => s.agreement);
+  const year            = useFilterStore((s) => s.year);
+  const dateRangeFrom   = useFilterStore((s) => s.dateRangeFrom);
+  const dateRangeTo     = useFilterStore((s) => s.dateRangeTo);
+
+  // Derive full inclusive year array — never undefined.
+  const years = useMemo(
+    () => buildYearsArray(year, dateRangeFrom, dateRangeTo),
+    [year, dateRangeFrom, dateRangeTo],
+  );
+
+  // Global filters used only by child drill-down queries (not the market query).
+  const regionIds   = region.length > 0         ? region         : undefined;
+  const agreementId = agreement.length > 0       ? agreement[0]   : undefined;
+
+  // ── Local state ──────────────────────────────────────────────────────────────
+  const [expanded,    setExpanded]    = useState<Record<string, boolean>>({});
+  const [rowCache,    setRowCache]    = useState<Map<string, RowData>>(new Map());
+  const [loadingKeys, setLoadingKeys] = useState<Set<string>>(new Set());
+  const [errorKeys,   setErrorKeys]   = useState<Set<string>>(new Set());
+
+  // ── Top-level market query ───────────────────────────────────────────────────
+  // FIX 1: The market-level query must NOT receive branch / group filters.
+  // Passing those causes the backend to find no markets that satisfy all
+  // constraints simultaneously and return an empty result set.
+  // Only `years` and `regionIds` are safe to apply at the market level;
+  // everything else belongs to the child drill-down queries.
   const {
     data: marketData,
     isLoading: marketLoading,
@@ -162,9 +221,9 @@ export default function DrillDownTable({
     refetch: marketRefetch,
   } = useDetailedSalesBreakdown({
     at: "market",
-    years: years ? years.split(",").map(Number) : undefined,
-    branchIds: branch, //  branch ? branch.split(",") : undefined
-    regionIds: region ? region.split(",") : undefined,
+    years,
+    regionIds,
+    // Intentionally omit: branchIds, group1Ids, group2Ids, group3Ids, agreementId
   });
 
   const tableData = useMemo<RowData[]>(() => {
@@ -179,165 +238,174 @@ export default function DrillDownTable({
 
   const isEmpty = !marketLoading && !marketError && tableData.length === 0;
 
+  // ── Drill-down child loader ──────────────────────────────────────────────────
   const loadChildren = useCallback(
-    async (
-      rowKey: string,
-      row: RowData,
-      parentBranchId: string,
-      parentGroup1Id?: string,
-      parentGroup2Id?: string,
-      parentGroup3Id?: string,
-    ) => {
-      if (row.childrenLoaded) return;
+    async (rowKey: string, row: RowData, ctx: DrillContext) => {
+      // Guard: check the live cache, not the stale closure row.
+      const liveRow = rowCache.get(rowKey) ?? row;
+      if (liveRow.childrenLoaded) return;
 
-      const nextLevel =
-        row.level === "market"
-          ? "group1"
-          : row.level === "group1"
-            ? "group2"
-            : row.level === "group2"
-              ? "group3"
-              : "product";
+      const nextLevel: RowData["level"] =
+        row.level === "market"  ? "group1"  :
+        row.level === "group1"  ? "group2"  :
+        row.level === "group2"  ? "group3"  :
+                                  "product";
 
       setLoadingKeys((prev) => new Set(prev).add(rowKey));
-      setErrorKeys((prev) => {
-        const s = new Set(prev);
-        s.delete(rowKey);
-        return s;
-      });
+      setErrorKeys((prev) => { const s = new Set(prev); s.delete(rowKey); return s; });
 
       try {
-        const branchIdToSend = row.level === "market" ? row.id : parentBranchId;
-        const group1IdToSend = row.level === "group1" ? row.id : parentGroup1Id;
-        const group2IdToSend = row.level === "group2" ? row.id : parentGroup2Id;
-        const group3IdToSend = row.level === "group3" ? row.id : parentGroup3Id;
+        // Resolve which IDs to forward to the child query.
+        // Each level "absorbs" the ID of the row that was clicked and passes
+        // the rest of the ancestor context down unchanged.
+        //
+        // FIX 2 / FIX 6:
+        //   • branchId is always the single market row id — never the
+        //     multi-value global activeBranches array.
+        //   • Global group filters (productCategory / subcategory / group3)
+        //     are applied here at the child level where they're meaningful,
+        //     but are overridden by the specific drilled ID when available.
+        const branchIdToSend =
+          row.level === "market" ? row.id : ctx.branchId;
+
+        // group1: use the clicked row id if we just expanded a group1 row,
+        // otherwise inherit from context; fall back to the global filter.
+        const group1IdToSend =
+          row.level === "group1"
+            ? row.id
+            : ctx.group1Id;
+
+        const group2IdToSend =
+          row.level === "group2"
+            ? row.id
+            : ctx.group2Id;
+
+        const group3IdToSend =
+          row.level === "group3"
+            ? row.id
+            : ctx.group3Id;
+
+        // Build optional array params — undefined means "no filter".
+        const branchIds =
+          branchIdToSend ? [branchIdToSend] : undefined;
+
+        // At group1 level: apply global group1 filter unless we have a
+        // specific drilled group1 id.
+        const group1Ids =
+          group1IdToSend
+            ? [group1IdToSend]
+            : productCategory.length > 0 ? productCategory : undefined;
+
+        const group2Ids =
+          group2IdToSend
+            ? [group2IdToSend]
+            : subcategory.length > 0 ? subcategory : undefined;
+
+        const group3Ids =
+          group3IdToSend
+            ? [group3IdToSend]
+            : group3Filter.length > 0 ? group3Filter : undefined;
 
         const json = await getDetailedSalesBreakdown({
           at: nextLevel,
-          years: years ? years.split(",").map(Number) : undefined,
-          branchIds: branchIdToSend || undefined,
-          group1Ids: group1IdToSend ? [group1IdToSend] : undefined,
-          group2Ids: group2IdToSend ? [group2IdToSend] : undefined,
-          group3Ids: group3IdToSend ? [group3IdToSend] : undefined,
+          years,
+          branchIds,
+          regionIds,
+          group1Ids,
+          group2Ids,
+          group3Ids,
+          agreementId,
         });
 
         const children: RowData[] = (json.data ?? []).map(
           (record: SalesBreakdownRecord) => ({
-            ...apiRecordToRowData(record, nextLevel as RowData["level"]),
+            ...apiRecordToRowData(record, nextLevel),
             children: [],
             childrenLoaded: false,
             childrenError: false,
           }),
         );
 
+        // FIX 3: use the functional updater so we always write onto the
+        // latest cache state, not the stale closure snapshot.
         setRowCache((prev) => {
+          const latest = prev.get(rowKey) ?? row;
           const next = new Map(prev);
-          next.set(rowKey, {
-            ...row,
-            children,
-            childrenLoaded: true,
-            childrenError: false,
-          });
+          next.set(rowKey, { ...latest, children, childrenLoaded: true, childrenError: false });
           return next;
         });
       } catch {
+        // FIX 3 (catch branch): same functional updater pattern.
         setRowCache((prev) => {
+          const latest = prev.get(rowKey) ?? row;
           const next = new Map(prev);
-          next.set(rowKey, {
-            ...row,
-            children: [],
-            childrenLoaded: false,
-            childrenError: true,
-          });
+          next.set(rowKey, { ...latest, children: [], childrenLoaded: false, childrenError: true });
           return next;
         });
         setErrorKeys((prev) => new Set(prev).add(rowKey));
       } finally {
-        setLoadingKeys((prev) => {
-          const s = new Set(prev);
-          s.delete(rowKey);
-          return s;
-        });
+        setLoadingKeys((prev) => { const s = new Set(prev); s.delete(rowKey); return s; });
       }
     },
-    [years],
+    // FIX: include all global filter values the child queries depend on so the
+    // callback is invalidated (and stale child data is cleared) when filters change.
+    [
+      years,
+      regionIds,
+      agreementId,
+      productCategory,
+      subcategory,
+      group3Filter,
+      rowCache,
+    ],
   );
 
+  // ── Toggle expand / collapse ─────────────────────────────────────────────────
   const toggle = useCallback(
-    (
-      rowKey: string,
-      row: RowData,
-      parentBranchId?: string,
-      parentGroup1Id?: string,
-      parentGroup2Id?: string,
-      parentGroup3Id?: string,
-    ) => {
+    (rowKey: string, row: RowData, ctx: DrillContext) => {
       setExpanded((prev) => {
         const isOpen = prev[rowKey] === true;
         if (isOpen) return { ...prev, [rowKey]: false };
 
-        if (!row.childrenLoaded && row.level !== "product") {
-          const branchId = row.level === "market" ? row.id : parentBranchId;
-          const group1Id = row.level === "group1" ? row.id : parentGroup1Id;
-          const group2Id = row.level === "group2" ? row.id : parentGroup2Id;
-          const group3Id = row.level === "group3" ? row.id : parentGroup3Id;
-          loadChildren(
-            rowKey,
-            row,
-            branchId ?? "",
-            group1Id,
-            group2Id,
-            group3Id,
-          );
+        // FIX 5: check rowCache for the live childrenLoaded flag.
+        // The original row object from tableData is never mutated, so
+        // its childrenLoaded is always false — causing duplicate fetches.
+        const liveRow = rowCache.get(rowKey) ?? row;
+        if (!liveRow.childrenLoaded && row.level !== "product") {
+          loadChildren(rowKey, row, ctx);
         }
         return { ...prev, [rowKey]: true };
       });
     },
-    [loadChildren],
+    [loadChildren, rowCache],
   );
 
+  // ── Retry failed child load ──────────────────────────────────────────────────
   const retryChildren = useCallback(
-    (
-      rowKey: string,
-      row: RowData,
-      parentBranchId?: string,
-      parentGroup1Id?: string,
-      parentGroup2Id?: string,
-      parentGroup3Id?: string,
-    ) => {
-      setErrorKeys((prev) => {
-        const s = new Set(prev);
-        s.delete(rowKey);
-        return s;
-      });
-      loadChildren(
-        rowKey,
-        row,
-        parentBranchId ?? "",
-        parentGroup1Id,
-        parentGroup2Id,
-        parentGroup3Id,
-      );
+    (rowKey: string, row: RowData, ctx: DrillContext) => {
+      setErrorKeys((prev) => { const s = new Set(prev); s.delete(rowKey); return s; });
+      loadChildren(rowKey, row, ctx);
     },
     [loadChildren],
   );
 
+  // ── Derived totals & maxima ───────────────────────────────────────────────────
   const totals = useMemo(() => {
     if (!marketData?.totals) return {} as Record<string, number>;
     const t = marketData.totals;
     return {
-      grossSales: t.total_sales,
-      netSales: t.net_sales,
-      invoiceCount: t.invoice_count,
-      discountValue: t.discount_value,
-      discountPct: t.discount_pct,
-      returns: t.return_amount,
-      returnedItemCount: t.returned_qty,
-      productVolume: t.sold_qty,
-      itemCount: t.item_count,
+      grossSales:         t.total_sales,
+      netSales:           t.net_sales,
+      invoiceCount:       t.invoice_count,
+      discountValue:      t.discount_value,
+      discountPct:        t.discount_pct,
+      returns:            t.return_amount,
+      returnedItemCount:  t.returned_qty,
+      productVolume:      t.sold_qty,
+      itemCount:          t.item_count,
       soldMaterialsValue: t.sold_items_value,
-      avgPrice: t.avg_price,
-      avgDiscRate: t.return_ratio_pct,
+      avgPrice:           t.avg_price,
+      avgDiscRate:        t.return_ratio_pct,
     };
   }, [marketData?.totals]);
 
@@ -345,50 +413,51 @@ export default function DrillDownTable({
     if (!marketData?.maxima) return {} as Record<string, number>;
     const m = marketData.maxima;
     return {
-      grossSales: m.total_sales,
-      netSales: m.net_sales,
-      invoiceCount: 1,
-      discountValue: m.discount_value,
-      discountPct: 100,
-      returns: m.return_amount,
-      returnedItemCount: m.returned_qty,
-      productVolume: m.sold_qty,
-      itemCount: m.item_count,
+      grossSales:         m.total_sales,
+      netSales:           m.net_sales,
+      invoiceCount:       1,
+      discountValue:      m.discount_value,
+      discountPct:        100,
+      returns:            m.return_amount,
+      returnedItemCount:  m.returned_qty,
+      productVolume:      m.sold_qty,
+      itemCount:          m.item_count,
       soldMaterialsValue: m.sold_items_value,
-      avgPrice: m.total_sales / Math.max(1, m.sold_qty),
-      avgDiscRate: 100,
+      avgPrice:           m.total_sales / Math.max(1, m.sold_qty),
+      avgDiscRate:        100,
     };
   }, [marketData?.maxima]);
 
   const maxGross = marketData?.maxima?.total_sales ?? 1;
 
+  // ── Recursive row renderer ────────────────────────────────────────────────────
   const renderRow = (
     row: RowData,
     level: number,
     parentKey: string,
     idx: number,
-    activeBranchId?: string,
-    activeGroup1Id?: string,
-    activeGroup2Id?: string,
-    activeGroup3Id?: string,
+    ctx: DrillContext,           // ancestor drill-down IDs
   ): React.ReactNode[] => {
-    const key = `${parentKey}-${idx}`;
+    const key       = `${parentKey}-${idx}`;
     const cachedRow = rowCache.get(key) ?? row;
-    const isOpen = expanded[key] === true;
+    const isOpen    = expanded[key] === true;
     const isChildLoading = loadingKeys.has(key);
-    const isChildError = errorKeys.has(key);
+    const isChildError   = errorKeys.has(key);
     const canExpand = level < 4;
-    const indent = level * 24;
+    const indent    = level * 24;
 
-    const colorIdx = Math.min(level, LEVEL_TEXT_COLORS.length - 1);
+    const colorIdx   = Math.min(level, LEVEL_TEXT_COLORS.length - 1);
     const chevronIdx = Math.min(level, CHEVRON_COLORS.length - 1);
-    const rowBg = (isOpen ? ROW_BG_OPEN : ROW_BG_CLOSED)[Math.min(level, 4)];
+    const rowBg      = (isOpen ? ROW_BG_OPEN : ROW_BG_CLOSED)[Math.min(level, 4)];
 
-    // Compute what each child level will need
-    const nextBranchId = row.level === "market" ? row.id : activeBranchId;
-    const nextGroup1Id = row.level === "group1" ? row.id : activeGroup1Id;
-    const nextGroup2Id = row.level === "group2" ? row.id : activeGroup2Id;
-    const nextGroup3Id = row.level === "group3" ? row.id : activeGroup3Id;
+    // Build the context to pass into child rows — each level "captures" its
+    // own id so descendants know which ancestor branch / groups they live under.
+    const childCtx: DrillContext = {
+      branchId: row.level === "market" ? row.id : ctx.branchId,
+      group1Id: row.level === "group1" ? row.id : ctx.group1Id,
+      group2Id: row.level === "group2" ? row.id : ctx.group2Id,
+      group3Id: row.level === "group3" ? row.id : ctx.group3Id,
+    };
 
     const nodes: React.ReactNode[] = [];
 
@@ -404,17 +473,7 @@ export default function DrillDownTable({
           borderBottom: "1px solid var(--border-subtle)",
           background: rowBg,
         }}
-        onClick={() =>
-          canExpand &&
-          toggle(
-            key,
-            cachedRow,
-            activeBranchId,
-            activeGroup1Id,
-            activeGroup2Id,
-            activeGroup3Id,
-          )
-        }
+        onClick={() => canExpand && toggle(key, cachedRow, ctx)}
       >
         {/* Name cell */}
         <td
@@ -452,16 +511,11 @@ export default function DrillDownTable({
                     style={{ color: CHEVRON_COLORS[chevronIdx] }}
                   />
                 ) : (
-                  <ChevronLeft
-                    size={11}
-                    style={{ color: "var(--text-muted)" }}
-                  />
+                  <ChevronLeft size={11} style={{ color: "var(--text-muted)" }} />
                 )}
               </span>
             ) : (
-              <span
-                style={{ width: 16, flexShrink: 0, display: "inline-block" }}
-              />
+              <span style={{ width: 16, flexShrink: 0, display: "inline-block" }} />
             )}
             <span
               className="text-xs font-medium"
@@ -472,12 +526,11 @@ export default function DrillDownTable({
           </div>
         </td>
 
-        {/* Data cells — unchanged */}
+        {/* Data cells */}
         {COLUMNS.map((col) => {
-          const val = (cachedRow as any)[col.key] as number | null;
+          const val       = (cachedRow as any)[col.key] as number | null;
           const isReturns = col.key === "returns";
-          const isPctOnly =
-            col.key === "discountPct" || col.key === "avgDiscRate";
+          const isPctOnly = col.key === "discountPct" || col.key === "avgDiscRate";
 
           if (isReturns) {
             return (
@@ -561,14 +614,7 @@ export default function DrillDownTable({
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  retryChildren(
-                    key,
-                    cachedRow,
-                    activeBranchId,
-                    activeGroup1Id,
-                    activeGroup2Id,
-                    activeGroup3Id,
-                  );
+                  retryChildren(key, cachedRow, ctx);
                 }}
                 className="flex items-center gap-1 px-2 py-0.5 rounded transition-opacity hover:opacity-80"
                 style={{
@@ -605,26 +651,10 @@ export default function DrillDownTable({
       );
     }
 
-    // Recursively render children — pass all computed next ids
-    if (
-      isOpen &&
-      !isChildLoading &&
-      !isChildError &&
-      cachedRow.children?.length
-    ) {
+    // Recursively render children
+    if (isOpen && !isChildLoading && !isChildError && cachedRow.children?.length) {
       cachedRow.children.forEach((child, ci) => {
-        nodes.push(
-          ...renderRow(
-            child,
-            level + 1,
-            key,
-            ci,
-            nextBranchId,
-            nextGroup1Id,
-            nextGroup2Id,
-            nextGroup3Id,
-          ),
-        );
+        nodes.push(...renderRow(child, level + 1, key, ci, childCtx));
       });
     }
 
@@ -638,10 +668,7 @@ export default function DrillDownTable({
       flag="green"
       titleFlagNumber={5}
       subtitles={
-        <p
-          className="text-[11px] mt-0.5"
-          style={{ color: "var(--text-muted)" }}
-        >
+        <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>
           التسلسل الهرمي: سوق — المجموعة الأولى — المجموعة الثانية — المجموعة
           الثالثة — المادة
         </p>
@@ -685,7 +712,7 @@ export default function DrillDownTable({
           })),
         ]}
       >
-        {/* Loading state — centered loader */}
+        {/* Loading */}
         {marketLoading && (
           <tr>
             <td
@@ -732,7 +759,7 @@ export default function DrillDownTable({
           </tr>
         )}
 
-        {/* Empty state */}
+        {/* Empty */}
         {isEmpty && (
           <tr>
             <td
@@ -740,10 +767,7 @@ export default function DrillDownTable({
               style={{ padding: "48px 24px", textAlign: "center" }}
             >
               <div className="flex flex-col items-center gap-2">
-                <Inbox
-                  size={20}
-                  style={{ color: "var(--text-muted)", opacity: 0.4 }}
-                />
+                <Inbox size={20} style={{ color: "var(--text-muted)", opacity: 0.4 }} />
                 <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
                   لا توجد بيانات للفترة المحددة
                 </span>
@@ -752,23 +776,14 @@ export default function DrillDownTable({
           </tr>
         )}
 
-        {/* Data rows */}
+        {/* Data rows — seed with empty DrillContext */}
         {!marketLoading &&
           !marketError &&
           tableData.flatMap((row, bi) =>
-            renderRow(
-              row,
-              0,
-              "root",
-              bi,
-              branch,
-              undefined,
-              undefined,
-              undefined,
-            ),
+            renderRow(row, 0, "root", bi, {}),
           )}
 
-        {/* Total row — only when data available */}
+        {/* Totals row */}
         {!marketLoading && !marketError && !isEmpty && (
           <tr
             style={{
@@ -778,11 +793,7 @@ export default function DrillDownTable({
           >
             <td style={analyticsTdBaseStyle("right")}>
               <span
-                style={{
-                  fontSize: 10,
-                  fontWeight: 700,
-                  color: "var(--accent-green)",
-                }}
+                style={{ fontSize: 10, fontWeight: 700, color: "var(--accent-green)" }}
               >
                 الإجمالي — Total
               </span>
@@ -791,10 +802,7 @@ export default function DrillDownTable({
               const totalVal = (totals as any)[col.key] as number | undefined;
               const totalColor =
                 col.key === "returns"
-                  ? returnsTextColor(
-                      totals.grossSales ?? 0,
-                      totals.returns ?? 0,
-                    )
+                  ? returnsTextColor(totals.grossSales ?? 0, totals.returns ?? 0)
                   : "var(--text-secondary)";
               return (
                 <td key={col.key} style={analyticsTdBaseStyle("center")}>
