@@ -1,6 +1,10 @@
 "use client";
 
-import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import React, {
+  useState,
+  useMemo,
+  useCallback,
+} from "react";
 import {
   ChevronDown,
   ChevronLeft,
@@ -12,7 +16,6 @@ import {
 import { AnalyticsLoader } from "@/components/ui/analytics-loader";
 import AnalyticsTableCard from "@/components/ui/AnalyticsTableCard";
 import {
-  AnalyticsBarCell,
   AnalyticsTable,
   analyticsTdBaseStyle,
 } from "@/components/ui/AnalyticsTable";
@@ -72,60 +75,52 @@ function apiRecordToRowData(
   };
 }
 
-/**
- * Build the years array from the filter store values.
- *
- * Priority:
- *  1. If a dateRangeFrom / dateRangeTo pair is available → expand into every
- *     year in the inclusive range (e.g. "2024-01" → "2026-12" → [2024,2025,2026]).
- *  2. Else if a single `year` string is set → [year].
- *  3. Fallback: current calendar year, so the API never receives an undefined
- *     years param and returns the entire history.
- */
 function buildYearsArray(
   year: string,
   dateRangeFrom: string,
   dateRangeTo: string,
 ): number[] {
   const fromYear = dateRangeFrom ? Number(dateRangeFrom.split("-")[0]) : NaN;
-  const toYear   = dateRangeTo   ? Number(dateRangeTo.split("-")[0])   : NaN;
+  const toYear = dateRangeTo ? Number(dateRangeTo.split("-")[0]) : NaN;
 
   if (!isNaN(fromYear) && !isNaN(toYear) && fromYear <= toYear) {
-    return Array.from({ length: toYear - fromYear + 1 }, (_, i) => fromYear + i);
+    return Array.from(
+      { length: toYear - fromYear + 1 },
+      (_, i) => fromYear + i,
+    );
   }
 
   const y = Number(year);
   if (year && !isNaN(y)) return [y];
 
-  // Hard fallback — never send undefined years to the API.
   return [new Date().getFullYear()];
 }
 
 // ── Column definitions ─────────────────────────────────────────────────────────
 
 const COLUMNS = [
-  { key: "grossSales",         label: "إجمالي المبيعات",      labelEn: "Gross Sales" },
-  { key: "netSales",           label: "صافي المبيعات",         labelEn: "Net Sales" },
-  { key: "invoiceCount",       label: "عدد الفواتير",          labelEn: "Invoice count" },
-  { key: "discountValue",      label: "قيمة الخصم",            labelEn: "Discount Value" },
-  { key: "discountPct",        label: "نسبة الخصم",            labelEn: "Discount %" },
-  { key: "returns",            label: "المرتجع",               labelEn: "Returns" },
-  { key: "returnedItemCount",  label: "عدد المواد المرتجعة",   labelEn: "Returned SKUs" },
-  { key: "productVolume",      label: "الكمية",                labelEn: "Quantity" },
-  { key: "itemCount",          label: "عدد المواد",            labelEn: "SKU Count" },
-  { key: "soldMaterialsValue", label: "سعر المواد المباعة",    labelEn: "Sold Materials Value" },
-  { key: "avgPrice",           label: "متوسط السعر",           labelEn: "Avg. Price" },
-  { key: "avgDiscRate",        label: "متوسط نسبة الخصم",      labelEn: "Avg. Discount %" },
+  { key: "grossSales",        label: "إجمالي المبيعات",      labelEn: "Gross Sales"          },
+  { key: "netSales",          label: "صافي المبيعات",        labelEn: "Net Sales"             },
+  { key: "invoiceCount",      label: "عدد الفواتير",         labelEn: "Invoice count"         },
+  { key: "discountValue",     label: "قيمة الخصم",           labelEn: "Discount Value"        },
+  { key: "discountPct",       label: "نسبة الخصم",           labelEn: "Discount %"            },
+  { key: "returns",           label: "المرتجع",              labelEn: "Returns"               },
+  { key: "returnedItemCount", label: "عدد المواد المرتجعة",  labelEn: "Returned SKUs"         },
+  { key: "productVolume",     label: "الكمية",               labelEn: "Quantity"              },
+  { key: "itemCount",         label: "عدد المواد",           labelEn: "SKU Count"             },
+  { key: "soldMaterialsValue",label: "سعر المواد المباعة",   labelEn: "Sold Materials Value"  },
+  { key: "avgPrice",          label: "متوسط السعر",          labelEn: "Avg. Price"            },
+  { key: "avgDiscRate",       label: "متوسط نسبة الخصم",     labelEn: "Avg. Discount %"       },
 ] as const;
 
 // ── Returns colour tiers ───────────────────────────────────────────────────────
 
 const RETURNS_TIERS = [
-  { maxExclusive: 1,        color: "#0a0a0a",  labelAr: "أقل من ١٪" },
-  { maxExclusive: 3,        color: "#ea580c",  labelAr: "١٪ – أقل من ٣٪" },
-  { maxExclusive: 5,        color: "#fb7185",  labelAr: "٣٪ – أقل من ٥٪" },
-  { maxExclusive: 10,       color: "#dc2626",  labelAr: "٥٪ – أقل من ١٠٪" },
-  { maxExclusive: Infinity, color: "#7f1d1d",  labelAr: "١٠٪ فأكثر" },
+  { maxExclusive: 1,        color: "#0a0a0a", labelAr: "أقل من ١٪"       },
+  { maxExclusive: 3,        color: "#ea580c", labelAr: "١٪ – أقل من ٣٪" },
+  { maxExclusive: 5,        color: "#fb7185", labelAr: "٣٪ – أقل من ٥٪" },
+  { maxExclusive: 10,       color: "#dc2626", labelAr: "٥٪ – أقل من ١٠٪"},
+  { maxExclusive: Infinity, color: "#7f1d1d", labelAr: "١٠٪ فأكثر"       },
 ] as const;
 
 function returnsTextColor(grossSales: number, returns: number): string {
@@ -154,7 +149,7 @@ const CHEVRON_COLORS = [
   "var(--accent-blue)",
 ];
 
-const ROW_BG_OPEN = [
+const ROW_BG_OPEN   = [
   "rgba(4,120,87,0.04)",
   "rgba(8,145,178,0.04)",
   "rgba(8,145,178,0.02)",
@@ -169,7 +164,172 @@ const ROW_BG_CLOSED = [
   "transparent",
 ];
 
-// ── Drill-down context passed down through recursive render ────────────────────
+const BAR_INDICATOR_KEYS = new Set([
+  "grossSales", "netSales", "discountValue", "productVolume",
+  "soldMaterialsValue", "avgPrice", "invoiceCount", "returnedItemCount", "itemCount",
+]);
+
+const CELL_PADDING_H = "0 12px";
+
+// ── AccentBarCell ─────────────────────────────────────────────────────────────
+
+function AccentBarCell({
+  text, title, value, max,
+  barColor = "rgba(99,155,255,0.55)",
+  textColor,
+}: {
+  text: string; title: string; value: number; max: number;
+  barColor?: string; textColor?: string;
+}) {
+  const MIN_H = 4;
+  const MAX_H = 20;
+  const ratio     = max > 0 ? Math.min(1, Math.max(0, value / max)) : 0;
+  const barHeight = Math.round(MIN_H + ratio * (MAX_H - MIN_H));
+
+  return (
+    <td title={title} style={{ padding: CELL_PADDING_H, verticalAlign: "middle", height: 36, whiteSpace: "nowrap", textAlign: "right", direction: "rtl" }}>
+      <span style={{ display: "inline-flex", flexDirection: "row", alignItems: "center", gap: 5, direction: "ltr" }}>
+        <span style={{ display: "inline-block", width: 3, height: barHeight, borderRadius: 99, background: barColor, flexShrink: 0 }} />
+        <span style={{ fontSize: 10, fontWeight: 500, color: textColor ?? "var(--text-primary)", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums", letterSpacing: "0.01em" }}>
+          {text}
+        </span>
+      </span>
+    </td>
+  );
+}
+
+// ── PlainCell ─────────────────────────────────────────────────────────────────
+
+function PlainCell({ text, title, color }: { text: string; title: string; color?: string }) {
+  return (
+    <td title={title} style={{ padding: CELL_PADDING_H, verticalAlign: "middle", height: 36, textAlign: "right", direction: "rtl", whiteSpace: "nowrap", cursor: "default" }}>
+      <span style={{ fontSize: 10, fontWeight: 500, color: color ?? "var(--text-secondary)", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums", letterSpacing: "0.01em", direction: "ltr", display: "inline-block" }}>
+        {text}
+      </span>
+    </td>
+  );
+}
+
+// ── MarketErrorRow ────────────────────────────────────────────────────────────
+// Top-level error: centred, prominent, shows auto-retry count + manual retry.
+
+function MarketErrorRow({
+  colSpan,
+  failureCount,
+  isRefetching,
+  onRetry,
+}: {
+  colSpan: number;
+  failureCount: number;
+  isRefetching: boolean;
+  onRetry: () => void;
+}) {
+  return (
+    <tr>
+      <td colSpan={colSpan} style={{ padding: "48px 24px", textAlign: "center" }}>
+        <div className="flex flex-col items-center gap-3">
+          <AlertCircle size={20} style={{ color: "var(--accent-red)", opacity: 0.75 }} />
+          <div className="flex flex-col items-center gap-1">
+            <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+              تعذر تحميل بيانات المبيعات
+            </span>
+            {failureCount > 1 && (
+              <span style={{ fontSize: 10, color: "var(--text-muted)", opacity: 0.7 }}>
+                ({failureCount} محاولات فاشلة)
+              </span>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onRetry}
+            disabled={isRefetching}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-opacity hover:opacity-80"
+            style={{
+              fontSize: 11,
+              background: "var(--bg-elevated)",
+              border: "1px solid var(--border-subtle)",
+              color: "var(--text-primary)",
+              cursor: isRefetching ? "not-allowed" : "pointer",
+              opacity: isRefetching ? 0.6 : 1,
+            }}
+          >
+            <RefreshCw
+              size={11}
+              style={{ animation: isRefetching ? "spin 0.8s linear infinite" : "none" }}
+            />
+            {isRefetching ? "جاري الإعادة…" : "إعادة المحاولة"}
+          </button>
+        </div>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </td>
+    </tr>
+  );
+}
+
+// ── ChildErrorRow ─────────────────────────────────────────────────────────────
+// Inline error inside an expanded row — indented to align with child rows,
+// shows attempt count and spins the retry button while in flight.
+
+function ChildErrorRow({
+  colSpan,
+  indent,
+  failureCount,
+  isRetrying,
+  onRetry,
+}: {
+  colSpan: number;
+  indent: number;
+  failureCount: number;
+  isRetrying: boolean;
+  onRetry: (e: React.MouseEvent) => void;
+}) {
+  return (
+    <tr style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+      <td
+        colSpan={colSpan}
+        style={{
+          padding: "6px 16px",
+          paddingRight: indent + 12 + 18 + 6,
+          verticalAlign: "middle",
+        }}
+      >
+        <div className="flex items-center gap-2">
+          <AlertCircle size={12} style={{ color: "var(--accent-red)", flexShrink: 0 }} />
+          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+            تعذر تحميل البيانات
+            {failureCount > 1 && (
+              <span style={{ opacity: 0.6, marginRight: 4, fontSize: 10 }}>
+                ({failureCount} محاولات)
+              </span>
+            )}
+          </span>
+          <button
+            type="button"
+            onClick={onRetry}
+            disabled={isRetrying}
+            className="flex items-center gap-1 px-2 py-0.5 rounded transition-opacity hover:opacity-80"
+            style={{
+              fontSize: 10,
+              background: "var(--bg-elevated)",
+              border: "1px solid var(--border-subtle)",
+              color: "var(--text-secondary)",
+              cursor: isRetrying ? "not-allowed" : "pointer",
+              opacity: isRetrying ? 0.6 : 1,
+            }}
+          >
+            <RefreshCw
+              size={9}
+              style={{ animation: isRetrying ? "spin 0.8s linear infinite" : "none" }}
+            />
+            {isRetrying ? "جاري…" : "إعادة المحاولة"}
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+// ── Drill-down context ────────────────────────────────────────────────────────
 
 interface DrillContext {
   branchId?: string;
@@ -178,53 +338,53 @@ interface DrillContext {
   group3Id?: string;
 }
 
+// ── Per-child error metadata ──────────────────────────────────────────────────
+// Tracks failure counts independently per row key so each inline error row
+// can show accurate attempt information without coupling to the market query.
+
+interface ChildErrorMeta {
+  count: number;   // how many times this child key has failed
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 
 export default function DrillDownTable() {
-  // Read every relevant global filter directly from the store.
   const activeBranches  = useFilterStore((s) => s.activeBranches);
   const region          = useFilterStore((s) => s.region);
-  const productCategory = useFilterStore((s) => s.productCategory); // group1
-  const subcategory     = useFilterStore((s) => s.subcategory);     // group2
-  const group3Filter    = useFilterStore((s) => s.product);          // group3
+  const productCategory = useFilterStore((s) => s.productCategory);
+  const subcategory     = useFilterStore((s) => s.subcategory);
+  const group3Filter    = useFilterStore((s) => s.product);
   const agreement       = useFilterStore((s) => s.agreement);
   const year            = useFilterStore((s) => s.year);
   const dateRangeFrom   = useFilterStore((s) => s.dateRangeFrom);
   const dateRangeTo     = useFilterStore((s) => s.dateRangeTo);
 
-  // Derive full inclusive year array — never undefined.
-  const years = useMemo(
-    () => buildYearsArray(year, dateRangeFrom, dateRangeTo),
-    [year, dateRangeFrom, dateRangeTo],
-  );
+  const years       = useMemo(() => buildYearsArray(year, dateRangeFrom, dateRangeTo), [year, dateRangeFrom, dateRangeTo]);
+  const regionIds   = region.length > 0    ? region       : undefined;
+  const agreementId = agreement.length > 0 ? agreement[0] : undefined;
 
-  // Global filters used only by child drill-down queries (not the market query).
-  const regionIds   = region.length > 0         ? region         : undefined;
-  const agreementId = agreement.length > 0       ? agreement[0]   : undefined;
-
-  // ── Local state ──────────────────────────────────────────────────────────────
   const [expanded,    setExpanded]    = useState<Record<string, boolean>>({});
   const [rowCache,    setRowCache]    = useState<Map<string, RowData>>(new Map());
   const [loadingKeys, setLoadingKeys] = useState<Set<string>>(new Set());
   const [errorKeys,   setErrorKeys]   = useState<Set<string>>(new Set());
+  // Tracks per-child failure counts for the inline error badge
+  const [childErrorMeta, setChildErrorMeta] = useState<Record<string, ChildErrorMeta>>({});
 
-  // ── Top-level market query ───────────────────────────────────────────────────
-  // FIX 1: The market-level query must NOT receive branch / group filters.
-  // Passing those causes the backend to find no markets that satisfy all
-  // constraints simultaneously and return an empty result set.
-  // Only `years` and `regionIds` are safe to apply at the market level;
-  // everything else belongs to the child drill-down queries.
   const {
     data: marketData,
-    isLoading: marketLoading,
-    isError: marketError,
-    refetch: marketRefetch,
-  } = useDetailedSalesBreakdown({
-    at: "market",
-    years,
-    regionIds,
-    // Intentionally omit: branchIds, group1Ids, group2Ids, group3Ids, agreementId
-  });
+    isLoading:  marketLoading,
+    isError:    marketError,
+    isFetching: marketFetching,
+    refetch:    marketRefetch,
+    failureCount: marketFailureCount,
+  } = useDetailedSalesBreakdown(
+    { at: "market", years, regionIds },
+    // Auto-retry twice silently before surfacing the error UI
+    { retry: 2, staleTime: 5 * 60 * 1000 },
+  );
+
+  // True only when a manual retry is in flight after an error
+  const isMarketRefetching = marketFetching && marketError;
 
   const tableData = useMemo<RowData[]>(() => {
     if (!marketData?.data) return [];
@@ -232,144 +392,83 @@ export default function DrillDownTable() {
       ...apiRecordToRowData(record, "market"),
       children: [],
       childrenLoaded: false,
-      childrenError: false,
+      childrenError:  false,
     }));
   }, [marketData?.data]);
 
   const isEmpty = !marketLoading && !marketError && tableData.length === 0;
 
-  // ── Drill-down child loader ──────────────────────────────────────────────────
   const loadChildren = useCallback(
     async (rowKey: string, row: RowData, ctx: DrillContext) => {
-      // Guard: check the live cache, not the stale closure row.
       const liveRow = rowCache.get(rowKey) ?? row;
       if (liveRow.childrenLoaded) return;
 
       const nextLevel: RowData["level"] =
         row.level === "market"  ? "group1"  :
         row.level === "group1"  ? "group2"  :
-        row.level === "group2"  ? "group3"  :
-                                  "product";
+        row.level === "group2"  ? "group3"  : "product";
 
       setLoadingKeys((prev) => new Set(prev).add(rowKey));
       setErrorKeys((prev) => { const s = new Set(prev); s.delete(rowKey); return s; });
 
       try {
-        // Resolve which IDs to forward to the child query.
-        // Each level "absorbs" the ID of the row that was clicked and passes
-        // the rest of the ancestor context down unchanged.
-        //
-        // FIX 2 / FIX 6:
-        //   • branchId is always the single market row id — never the
-        //     multi-value global activeBranches array.
-        //   • Global group filters (productCategory / subcategory / group3)
-        //     are applied here at the child level where they're meaningful,
-        //     but are overridden by the specific drilled ID when available.
-        const branchIdToSend =
-          row.level === "market" ? row.id : ctx.branchId;
-
-        // group1: use the clicked row id if we just expanded a group1 row,
-        // otherwise inherit from context; fall back to the global filter.
-        const group1IdToSend =
-          row.level === "group1"
-            ? row.id
-            : ctx.group1Id;
-
-        const group2IdToSend =
-          row.level === "group2"
-            ? row.id
-            : ctx.group2Id;
-
-        const group3IdToSend =
-          row.level === "group3"
-            ? row.id
-            : ctx.group3Id;
-
-        // Build optional array params — undefined means "no filter".
-        const branchIds =
-          branchIdToSend ? [branchIdToSend] : undefined;
-
-        // At group1 level: apply global group1 filter unless we have a
-        // specific drilled group1 id.
-        const group1Ids =
-          group1IdToSend
-            ? [group1IdToSend]
-            : productCategory.length > 0 ? productCategory : undefined;
-
-        const group2Ids =
-          group2IdToSend
-            ? [group2IdToSend]
-            : subcategory.length > 0 ? subcategory : undefined;
-
-        const group3Ids =
-          group3IdToSend
-            ? [group3IdToSend]
-            : group3Filter.length > 0 ? group3Filter : undefined;
+        const branchIdToSend = row.level === "market" ? row.id : ctx.branchId;
+        const group1IdToSend = row.level === "group1" ? row.id : ctx.group1Id;
+        const group2IdToSend = row.level === "group2" ? row.id : ctx.group2Id;
+        const group3IdToSend = row.level === "group3" ? row.id : ctx.group3Id;
 
         const json = await getDetailedSalesBreakdown({
           at: nextLevel,
           years,
-          branchIds,
+          branchIds:  branchIdToSend ? [branchIdToSend] : undefined,
           regionIds,
-          group1Ids,
-          group2Ids,
-          group3Ids,
+          group1Ids:  group1IdToSend ? [group1IdToSend] : productCategory.length > 0 ? productCategory : undefined,
+          group2Ids:  group2IdToSend ? [group2IdToSend] : subcategory.length > 0    ? subcategory    : undefined,
+          group3Ids:  group3IdToSend ? [group3IdToSend] : group3Filter.length > 0   ? group3Filter   : undefined,
           agreementId,
         });
 
         const children: RowData[] = (json.data ?? []).map(
           (record: SalesBreakdownRecord) => ({
             ...apiRecordToRowData(record, nextLevel),
-            children: [],
-            childrenLoaded: false,
-            childrenError: false,
+            children: [], childrenLoaded: false, childrenError: false,
           }),
         );
 
-        // FIX 3: use the functional updater so we always write onto the
-        // latest cache state, not the stale closure snapshot.
         setRowCache((prev) => {
           const latest = prev.get(rowKey) ?? row;
-          const next = new Map(prev);
+          const next   = new Map(prev);
           next.set(rowKey, { ...latest, children, childrenLoaded: true, childrenError: false });
           return next;
         });
+        // Reset error meta on success
+        setChildErrorMeta((prev) => { const n = { ...prev }; delete n[rowKey]; return n; });
+
       } catch {
-        // FIX 3 (catch branch): same functional updater pattern.
         setRowCache((prev) => {
           const latest = prev.get(rowKey) ?? row;
-          const next = new Map(prev);
+          const next   = new Map(prev);
           next.set(rowKey, { ...latest, children: [], childrenLoaded: false, childrenError: true });
           return next;
         });
         setErrorKeys((prev) => new Set(prev).add(rowKey));
+        // Increment failure count for this child
+        setChildErrorMeta((prev) => ({
+          ...prev,
+          [rowKey]: { count: (prev[rowKey]?.count ?? 0) + 1 },
+        }));
       } finally {
         setLoadingKeys((prev) => { const s = new Set(prev); s.delete(rowKey); return s; });
       }
     },
-    // FIX: include all global filter values the child queries depend on so the
-    // callback is invalidated (and stale child data is cleared) when filters change.
-    [
-      years,
-      regionIds,
-      agreementId,
-      productCategory,
-      subcategory,
-      group3Filter,
-      rowCache,
-    ],
+    [years, regionIds, agreementId, productCategory, subcategory, group3Filter, rowCache],
   );
 
-  // ── Toggle expand / collapse ─────────────────────────────────────────────────
   const toggle = useCallback(
     (rowKey: string, row: RowData, ctx: DrillContext) => {
       setExpanded((prev) => {
         const isOpen = prev[rowKey] === true;
         if (isOpen) return { ...prev, [rowKey]: false };
-
-        // FIX 5: check rowCache for the live childrenLoaded flag.
-        // The original row object from tableData is never mutated, so
-        // its childrenLoaded is always false — causing duplicate fetches.
         const liveRow = rowCache.get(rowKey) ?? row;
         if (!liveRow.childrenLoaded && row.level !== "product") {
           loadChildren(rowKey, row, ctx);
@@ -380,7 +479,6 @@ export default function DrillDownTable() {
     [loadChildren, rowCache],
   );
 
-  // ── Retry failed child load ──────────────────────────────────────────────────
   const retryChildren = useCallback(
     (rowKey: string, row: RowData, ctx: DrillContext) => {
       setErrorKeys((prev) => { const s = new Set(prev); s.delete(rowKey); return s; });
@@ -389,23 +487,14 @@ export default function DrillDownTable() {
     [loadChildren],
   );
 
-  // ── Derived totals & maxima ───────────────────────────────────────────────────
   const totals = useMemo(() => {
     if (!marketData?.totals) return {} as Record<string, number>;
     const t = marketData.totals;
     return {
-      grossSales:         t.total_sales,
-      netSales:           t.net_sales,
-      invoiceCount:       t.invoice_count,
-      discountValue:      t.discount_value,
-      discountPct:        t.discount_pct,
-      returns:            t.return_amount,
-      returnedItemCount:  t.returned_qty,
-      productVolume:      t.sold_qty,
-      itemCount:          t.item_count,
-      soldMaterialsValue: t.sold_items_value,
-      avgPrice:           t.avg_price,
-      avgDiscRate:        t.return_ratio_pct,
+      grossSales: t.total_sales, netSales: t.net_sales, invoiceCount: t.invoice_count,
+      discountValue: t.discount_value, discountPct: t.discount_pct, returns: t.return_amount,
+      returnedItemCount: t.returned_qty, productVolume: t.sold_qty, itemCount: t.item_count,
+      soldMaterialsValue: t.sold_items_value, avgPrice: t.avg_price, avgDiscRate: t.return_ratio_pct,
     };
   }, [marketData?.totals]);
 
@@ -413,45 +502,37 @@ export default function DrillDownTable() {
     if (!marketData?.maxima) return {} as Record<string, number>;
     const m = marketData.maxima;
     return {
-      grossSales:         m.total_sales,
-      netSales:           m.net_sales,
-      invoiceCount:       1,
-      discountValue:      m.discount_value,
-      discountPct:        100,
-      returns:            m.return_amount,
-      returnedItemCount:  m.returned_qty,
-      productVolume:      m.sold_qty,
-      itemCount:          m.item_count,
+      grossSales: m.total_sales, netSales: m.net_sales, invoiceCount: 1,
+      discountValue: m.discount_value, discountPct: 100, returns: m.return_amount,
+      returnedItemCount: m.returned_qty, productVolume: m.sold_qty, itemCount: m.item_count,
       soldMaterialsValue: m.sold_items_value,
-      avgPrice:           m.total_sales / Math.max(1, m.sold_qty),
-      avgDiscRate:        100,
+      avgPrice: m.total_sales / Math.max(1, m.sold_qty), avgDiscRate: 100,
     };
   }, [marketData?.maxima]);
 
   const maxGross = marketData?.maxima?.total_sales ?? 1;
 
   // ── Recursive row renderer ────────────────────────────────────────────────────
+
   const renderRow = (
     row: RowData,
     level: number,
     parentKey: string,
     idx: number,
-    ctx: DrillContext,           // ancestor drill-down IDs
+    ctx: DrillContext,
   ): React.ReactNode[] => {
     const key       = `${parentKey}-${idx}`;
     const cachedRow = rowCache.get(key) ?? row;
-    const isOpen    = expanded[key] === true;
-    const isChildLoading = loadingKeys.has(key);
-    const isChildError   = errorKeys.has(key);
-    const canExpand = level < 4;
-    const indent    = level * 24;
+    const isOpen           = expanded[key] === true;
+    const isChildLoading   = loadingKeys.has(key);
+    const isChildError     = errorKeys.has(key);
+    const canExpand        = level < 4;
+    const indent           = level * 20;
+    const colorIdx         = Math.min(level, LEVEL_TEXT_COLORS.length - 1);
+    const chevronIdx       = Math.min(level, CHEVRON_COLORS.length - 1);
+    const rowBg            = (isOpen ? ROW_BG_OPEN : ROW_BG_CLOSED)[Math.min(level, 4)];
+    const childFailCount   = childErrorMeta[key]?.count ?? 1;
 
-    const colorIdx   = Math.min(level, LEVEL_TEXT_COLORS.length - 1);
-    const chevronIdx = Math.min(level, CHEVRON_COLORS.length - 1);
-    const rowBg      = (isOpen ? ROW_BG_OPEN : ROW_BG_CLOSED)[Math.min(level, 4)];
-
-    // Build the context to pass into child rows — each level "captures" its
-    // own id so descendants know which ancestor branch / groups they live under.
     const childCtx: DrillContext = {
       branchId: row.level === "market" ? row.id : ctx.branchId,
       group1Id: row.level === "group1" ? row.id : ctx.group1Id,
@@ -464,63 +545,26 @@ export default function DrillDownTable() {
     nodes.push(
       <tr
         key={key}
-        className={
-          canExpand
-            ? "cursor-pointer hover:bg-white/[0.015] transition-colors"
-            : undefined
-        }
-        style={{
-          borderBottom: "1px solid var(--border-subtle)",
-          background: rowBg,
-        }}
+        className={canExpand ? "cursor-pointer hover:bg-white/[0.015] transition-colors" : undefined}
+        style={{ borderBottom: "1px solid var(--border-subtle)", background: rowBg, height: 36 }}
         onClick={() => canExpand && toggle(key, cachedRow, ctx)}
       >
         {/* Name cell */}
-        <td
-          style={{
-            ...analyticsTdBaseStyle("right"),
-            paddingRight: `${indent + 12}px`,
-          }}
-        >
-          <div className="flex items-center gap-1.5">
+        <td style={{ ...analyticsTdBaseStyle("right"), paddingRight: 12, paddingLeft: 8, verticalAlign: "middle", whiteSpace: "nowrap" }}>
+          <div style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 6 }}>
+            {indent > 0 && <span aria-hidden style={{ display: "inline-block", width: indent, flexShrink: 0 }} />}
             {canExpand ? (
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  width: 16,
-                  height: 16,
-                  borderRadius: 4,
-                  background: isOpen
-                    ? "rgba(0,229,160,0.11)"
-                    : "var(--bg-elevated)",
-                  transition: "all 0.2s",
-                  flexShrink: 0,
-                }}
-              >
-                {isChildLoading ? (
-                  <Loader2
-                    size={10}
-                    className="animate-spin"
-                    style={{ color: CHEVRON_COLORS[chevronIdx] }}
-                  />
-                ) : isOpen ? (
-                  <ChevronDown
-                    size={11}
-                    style={{ color: CHEVRON_COLORS[chevronIdx] }}
-                  />
-                ) : (
-                  <ChevronLeft size={11} style={{ color: "var(--text-muted)" }} />
-                )}
+              <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 18, height: 18, borderRadius: 4, background: isOpen ? "rgba(0,229,160,0.11)" : "var(--bg-elevated)", transition: "background 0.2s", flexShrink: 0 }}>
+                {isChildLoading
+                  ? <Loader2 size={10} className="animate-spin" style={{ color: CHEVRON_COLORS[chevronIdx] }} />
+                  : isOpen
+                    ? <ChevronDown  size={11} style={{ color: CHEVRON_COLORS[chevronIdx] }} />
+                    : <ChevronLeft  size={11} style={{ color: "var(--text-muted)" }} />}
               </span>
             ) : (
-              <span style={{ width: 16, flexShrink: 0, display: "inline-block" }} />
+              <span style={{ width: 18, height: 18, flexShrink: 0, display: "inline-block" }} />
             )}
-            <span
-              className="text-xs font-medium"
-              style={{ color: LEVEL_TEXT_COLORS[colorIdx] }}
-            >
+            <span className="text-xs font-medium" style={{ color: LEVEL_TEXT_COLORS[colorIdx], whiteSpace: "nowrap", lineHeight: 1.4 }}>
               {row.name}
             </span>
           </div>
@@ -531,127 +575,45 @@ export default function DrillDownTable() {
           const val       = (cachedRow as any)[col.key] as number | null;
           const isReturns = col.key === "returns";
           const isPctOnly = col.key === "discountPct" || col.key === "avgDiscRate";
+          const hasPipe   = BAR_INDICATOR_KEYS.has(col.key);
 
           if (isReturns) {
-            return (
-              <td key={col.key} style={analyticsTdBaseStyle("center")}>
-                <span
-                  title={fmtFull(val, col.key)}
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 600,
-                    color:
-                      val !== null
-                        ? returnsTextColor(cachedRow.grossSales, val)
-                        : "var(--text-muted)",
-                    cursor: "default",
-                  }}
-                  dir="ltr"
-                >
-                  {fmt(val, col.key)}
-                </span>
-              </td>
-            );
+            const retColor = val !== null ? returnsTextColor(cachedRow.grossSales, val) : "var(--text-muted)";
+            return <AccentBarCell key={col.key} text={fmt(val, col.key)} title={fmtFull(val, col.key)} value={val ?? 0} max={(maxByKey as any)[col.key] ?? maxGross} barColor={retColor} textColor={retColor} />;
           }
-
-          if (isPctOnly) {
-            return (
-              <td key={col.key} style={analyticsTdBaseStyle("center")}>
-                <span
-                  title={fmtFull(val, col.key)}
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 600,
-                    color: "var(--text-secondary)",
-                    cursor: "default",
-                  }}
-                  dir="ltr"
-                >
-                  {fmt(val, col.key)}
-                </span>
-              </td>
-            );
-          }
-
-          return (
-            <td
-              key={col.key}
-              title={fmtFull(val, col.key)}
-              style={{ cursor: "default" }}
-            >
-              <AnalyticsBarCell
-                value={val ?? 0}
-                max={(maxByKey as any)[col.key] ?? maxGross}
-                color="#3b82f6"
-                text={fmt(val, col.key)}
-              />
-            </td>
-          );
+          if (isPctOnly) return <PlainCell key={col.key} text={fmt(val, col.key)} title={fmtFull(val, col.key)} color="var(--text-secondary)" />;
+          if (hasPipe)   return <AccentBarCell key={col.key} text={fmt(val, col.key)} title={fmtFull(val, col.key)} value={val ?? 0} max={(maxByKey as any)[col.key] ?? maxGross} barColor="rgba(99,155,255,0.55)" />;
+          return <PlainCell key={col.key} text={fmt(val, col.key)} title={fmtFull(val, col.key)} />;
         })}
       </tr>,
     );
 
-    // Error row
+    // Inline child error row with failure count + spinning retry
     if (isOpen && isChildError && !isChildLoading) {
       nodes.push(
-        <tr
+        <ChildErrorRow
           key={`${key}-error`}
-          style={{ borderBottom: "1px solid var(--border-subtle)" }}
-        >
-          <td
-            colSpan={COLUMNS.length + 1}
-            style={{ padding: "8px 16px", paddingRight: `${indent + 36}px` }}
-          >
-            <div className="flex items-center gap-2">
-              <AlertCircle
-                size={12}
-                style={{ color: "var(--accent-red)", flexShrink: 0 }}
-              />
-              <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                تعذر تحميل البيانات
-              </span>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  retryChildren(key, cachedRow, ctx);
-                }}
-                className="flex items-center gap-1 px-2 py-0.5 rounded transition-opacity hover:opacity-80"
-                style={{
-                  fontSize: 10,
-                  background: "var(--bg-elevated)",
-                  border: "1px solid var(--border-subtle)",
-                  color: "var(--text-secondary)",
-                  cursor: "pointer",
-                }}
-              >
-                <RefreshCw size={9} />
-                إعادة المحاولة
-              </button>
-            </div>
-          </td>
-        </tr>,
+          colSpan={COLUMNS.length + 1}
+          indent={indent}
+          failureCount={childFailCount}
+          isRetrying={false}   // loadingKeys already covers the spinner on the chevron
+          onRetry={(e) => { e.stopPropagation(); retryChildren(key, cachedRow, ctx); }}
+        />,
       );
     }
 
     // Loading row
     if (isOpen && isChildLoading) {
       nodes.push(
-        <tr
-          key={`${key}-loading`}
-          style={{ borderBottom: "1px solid var(--border-subtle)" }}
-        >
-          <td
-            colSpan={COLUMNS.length + 1}
-            style={{ padding: 0, position: "relative", height: 80 }}
-          >
+        <tr key={`${key}-loading`} style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+          <td colSpan={COLUMNS.length + 1} style={{ padding: 0, position: "relative", height: 80 }}>
             <AnalyticsLoader variant="compact" title="جاري تحميل البيانات" />
           </td>
         </tr>,
       );
     }
 
-    // Recursively render children
+    // Children
     if (isOpen && !isChildLoading && !isChildError && cachedRow.children?.length) {
       cachedRow.children.forEach((child, ci) => {
         nodes.push(...renderRow(child, level + 1, key, ci, childCtx));
@@ -662,6 +624,7 @@ export default function DrillDownTable() {
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────
+
   return (
     <AnalyticsTableCard
       title="تحليل المبيعات التفصيلي — سوق / مجموعات / مادة"
@@ -669,32 +632,17 @@ export default function DrillDownTable() {
       titleFlagNumber={5}
       subtitles={
         <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>
-          التسلسل الهرمي: سوق — المجموعة الأولى — المجموعة الثانية — المجموعة
-          الثالثة — المادة
+          التسلسل الهرمي: سوق — المجموعة الأولى — المجموعة الثانية — المجموعة الثالثة — المادة
         </p>
       }
       headerExtra={
-        <div
-          className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[10px]"
-          style={{ color: "var(--text-muted)" }}
-        >
-          <span
-            className="font-medium shrink-0"
-            style={{ color: "var(--text-secondary)" }}
-          >
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[10px]" style={{ color: "var(--text-muted)" }}>
+          <span className="font-medium shrink-0" style={{ color: "var(--text-secondary)" }}>
             ألوان المرتجع (نسبة المرتجع / الإجمالي):
           </span>
           {RETURNS_TIERS.map((tier) => (
             <span key={tier.labelAr} className="inline-flex items-center gap-1">
-              <span
-                className="inline-block rounded-sm shrink-0"
-                style={{
-                  width: 10,
-                  height: 10,
-                  background: tier.color,
-                  border: "1px solid var(--border-subtle)",
-                }}
-              />
+              <span className="inline-block rounded-sm shrink-0" style={{ width: 10, height: 10, background: tier.color, border: "1px solid var(--border-subtle)" }} />
               <span>{tier.labelAr}</span>
             </span>
           ))}
@@ -702,120 +650,59 @@ export default function DrillDownTable() {
       }
     >
       <AnalyticsTable
-        minWidth="1620px"
+        minWidth="1280px"
         headers={[
-          { label: "الاسم", align: "right", width: "160px" },
-          ...COLUMNS.map((c) => ({
-            label: c.label,
-            align: "center" as const,
-            width: "110px" as const,
-          })),
+          { label: "الاسم", align: "right", width: "220px" },
+          ...COLUMNS.map((c) => ({ label: c.label, align: "right" as const, width: "88px" as const })),
         ]}
       >
         {/* Loading */}
         {marketLoading && (
           <tr>
-            <td
-              colSpan={COLUMNS.length + 1}
-              style={{ padding: 0, position: "relative", height: 200 }}
-            >
+            <td colSpan={COLUMNS.length + 1} style={{ padding: 0, position: "relative", height: 200 }}>
               <AnalyticsLoader variant="compact" title="جاري تحميل البيانات" />
             </td>
           </tr>
         )}
 
-        {/* Market-level error */}
+        {/* Market-level error — prominent, centred, with failure count */}
         {!marketLoading && marketError && (
-          <tr>
-            <td
-              colSpan={COLUMNS.length + 1}
-              style={{ padding: "48px 24px", textAlign: "center" }}
-            >
-              <div className="flex flex-col items-center gap-3">
-                <AlertCircle
-                  size={20}
-                  style={{ color: "var(--accent-red)", opacity: 0.75 }}
-                />
-                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                  تعذر تحميل بيانات المبيعات
-                </span>
-                <button
-                  type="button"
-                  onClick={() => marketRefetch()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-opacity hover:opacity-80"
-                  style={{
-                    fontSize: 11,
-                    background: "var(--bg-elevated)",
-                    border: "1px solid var(--border-subtle)",
-                    color: "var(--text-primary)",
-                    cursor: "pointer",
-                  }}
-                >
-                  <RefreshCw size={11} />
-                  إعادة المحاولة
-                </button>
-              </div>
-            </td>
-          </tr>
+          <MarketErrorRow
+            colSpan={COLUMNS.length + 1}
+            failureCount={marketFailureCount}
+            isRefetching={!!isMarketRefetching}
+            onRetry={() => marketRefetch()}
+          />
         )}
 
         {/* Empty */}
         {isEmpty && (
           <tr>
-            <td
-              colSpan={COLUMNS.length + 1}
-              style={{ padding: "48px 24px", textAlign: "center" }}
-            >
+            <td colSpan={COLUMNS.length + 1} style={{ padding: "48px 24px", textAlign: "center" }}>
               <div className="flex flex-col items-center gap-2">
                 <Inbox size={20} style={{ color: "var(--text-muted)", opacity: 0.4 }} />
-                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                  لا توجد بيانات للفترة المحددة
-                </span>
+                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>لا توجد بيانات للفترة المحددة</span>
               </div>
             </td>
           </tr>
         )}
 
-        {/* Data rows — seed with empty DrillContext */}
-        {!marketLoading &&
-          !marketError &&
-          tableData.flatMap((row, bi) =>
-            renderRow(row, 0, "root", bi, {}),
-          )}
+        {/* Data rows */}
+        {!marketLoading && !marketError && tableData.flatMap((row, bi) => renderRow(row, 0, "root", bi, {}))}
 
         {/* Totals row */}
         {!marketLoading && !marketError && !isEmpty && (
-          <tr
-            style={{
-              background: "var(--accent-green-dim)",
-              borderTop: "2px solid rgba(0,229,160,0.3)",
-            }}
-          >
-            <td style={analyticsTdBaseStyle("right")}>
-              <span
-                style={{ fontSize: 10, fontWeight: 700, color: "var(--accent-green)" }}
-              >
-                الإجمالي — Total
-              </span>
+          <tr style={{ background: "var(--accent-green-dim)", borderTop: "2px solid rgba(0,229,160,0.3)", height: 36 }}>
+            <td style={{ ...analyticsTdBaseStyle("right"), paddingRight: 12, verticalAlign: "middle" }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: "var(--accent-green)" }}>الإجمالي — Total</span>
             </td>
             {COLUMNS.map((col) => {
-              const totalVal = (totals as any)[col.key] as number | undefined;
-              const totalColor =
-                col.key === "returns"
-                  ? returnsTextColor(totals.grossSales ?? 0, totals.returns ?? 0)
-                  : "var(--text-secondary)";
+              const totalVal  = (totals as any)[col.key] as number | undefined;
+              const isReturns = col.key === "returns";
+              const totalColor = isReturns ? returnsTextColor(totals.grossSales ?? 0, totals.returns ?? 0) : "var(--text-secondary)";
               return (
-                <td key={col.key} style={analyticsTdBaseStyle("center")}>
-                  <span
-                    title={fmtFull(totalVal ?? null, col.key)}
-                    style={{
-                      fontSize: 10,
-                      fontWeight: 700,
-                      color: totalColor,
-                      cursor: "default",
-                    }}
-                    dir="ltr"
-                  >
+                <td key={col.key} style={{ padding: CELL_PADDING_H, verticalAlign: "middle", textAlign: "right", direction: "rtl", whiteSpace: "nowrap" }}>
+                  <span title={fmtFull(totalVal ?? null, col.key)} style={{ fontSize: 10, fontWeight: 700, color: totalColor, cursor: "default", fontVariantNumeric: "tabular-nums", letterSpacing: "0.01em", direction: "ltr", display: "inline-block" }}>
                     {fmt(totalVal ?? null, col.key)}
                   </span>
                 </td>

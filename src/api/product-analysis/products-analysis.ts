@@ -50,10 +50,6 @@ export const withDefinedParams = (
 
 // ─── C1.1: Net Sales by Category ───────────────────────────────────────────────
 
-/**
- * Fetches net sales by category with optional filtering
- * Supports grouping by category level and filtering by date range or periods
- */
 export const getNetSalesByCategory = async (
   params: NetSalesByCategoryParams,
 ): Promise<NetSalesByCategoryResponse> => {
@@ -75,17 +71,11 @@ export const getNetSalesByCategory = async (
       }),
     },
   );
-
   return response.data;
 };
 
 // ─── C1.2: Sales Volume & Margin ───────────────────────────────────────────────
 
-/**
- * Fetches sales volume and profit margin data organized by category level
- * Commonly used for scatter plot/bubble chart visualizations
- * Requires parent level IDs when querying deeper hierarchies
- */
 export const getSalesVolumeMargin = async (
   params: SalesVolumeMarginParams,
 ): Promise<SalesVolumeMarginResponse> => {
@@ -105,17 +95,11 @@ export const getSalesVolumeMargin = async (
       }),
     },
   );
-
   return response.data;
 };
 
 // ─── C2.1: Top 10 Products ────────────────────────────────────────────────────
 
-/**
- * Fetches the top 10 performing products by profit
- * Can be filtered by year, region, branch, or product hierarchy
- * Returns monthly profit breakdown within each year
- */
 export const getTop10Products = async (
   params: Top10ProductsParams,
 ): Promise<Top10ProductsResponse> => {
@@ -132,17 +116,11 @@ export const getTop10Products = async (
       }),
     },
   );
-
   return response.data;
 };
 
 // ─── C2.2: Least 10 Products ──────────────────────────────────────────────────
 
-/**
- * Fetches the least 10 performing products by profit
- * Can be filtered by year, region, branch, or product hierarchy
- * Returns monthly profit breakdown within each year
- */
 export const getLeast10Products = async (
   params: Least10ProductsParams,
 ): Promise<Least10ProductsResponse> => {
@@ -159,17 +137,11 @@ export const getLeast10Products = async (
       }),
     },
   );
-
   return response.data;
 };
 
 // ─── C3.1: Sales & Profit Contribution ─────────────────────────────────────────
 
-/**
- * Fetches detailed sales and profit contribution data by product
- * Includes individual and combined scoring metrics
- * Returns aggregated totals for quick KPI calculation
- */
 export const getSalesProfitContribution = async (
   params: SalesProfitContributionParams,
 ): Promise<SalesProfitContributionResponse> => {
@@ -188,17 +160,11 @@ export const getSalesProfitContribution = async (
       }),
     },
   );
-
   return response.data;
 };
 
 // ─── C3.2: Returns by Product ──────────────────────────────────────────────────
 
-/**
- * Fetches product return quantities and return rates
- * Can be filtered by temporal dimensions (year, month, quarter)
- * or categorical dimensions (region, branch, product hierarchy)
- */
 export const getReturnsByProduct = async (
   params: ReturnsByProductParams,
 ): Promise<ReturnsByProductResponse> => {
@@ -210,9 +176,9 @@ export const getReturnsByProduct = async (
         years: toCsv(params.years),
         month: toCsv(params.month),
         quarter: toCsv(params.quarter),
-        from_date: params.fromDate,   
-        to_date: params.toDate,      
-        region: toCsv(params.regionIds),  
+        from_date: params.fromDate,
+        to_date: params.toDate,
+        region: toCsv(params.regionIds),
         branch: toCsv(params.branchIds),
         group1: toCsv(params.group1Ids),
         group2: toCsv(params.group2Ids),
@@ -220,16 +186,11 @@ export const getReturnsByProduct = async (
       }),
     },
   );
-
   return response.data;
 };
 
 // ─── C5: Damaged Products Reasons ──────────────────────────────────────────────
 
-/**
- * Fetches counts of damaged products categorized by damage reason
- * Can be filtered by year and various dimensions
- */
 export const getDamagedProductsReasons = async (
   params: DamagedProductsReasonsParams,
 ): Promise<DamagedProductsReasonsResponse> => {
@@ -247,16 +208,23 @@ export const getDamagedProductsReasons = async (
       }),
     },
   );
-
   return response.data;
 };
 
 // ─── C6: Product Catalog ──────────────────────────────────────────────────────
 
 /**
- * Fetches hierarchical product catalog with sales and margin data
- * Returns nested structure from category level down to individual products
- * Can be filtered by date range and various dimensions
+ * API contract for group_level drill-down:
+ *
+ *   group_level=group1               → root, no parent filter needed
+ *   group_level=group2 + group1=[id] → children of a specific group1 row
+ *   group_level=group3 + group2=[id] → children of a specific group2 row
+ *
+ * The component passes either:
+ *   - group1Ids / group2Ids / group3Ids (arrays) for store-level filters on the root query
+ *   - group1Id / group2Id (single integers) for the lazy-load parent filter
+ *
+ * Both are handled here and sent as the appropriate query param.
  */
 export const getProductCatalog = async (
   params: ProductCatalogParams,
@@ -265,20 +233,22 @@ export const getProductCatalog = async (
     `${BASE_URL}/product-catalog`,
     {
       params: withDefinedParams({
-        year: toCsv(params.years),
-        month: toCsv(params.month),
-        quarter: toCsv(params.quarter),
-        from_date: params.fromDate,
-        to_date: params.toDate,
-        region: toCsv(params.regionIds),
-        branch: toCsv(params.branchIds),
-        group1: toCsv(params.group1Ids),
-        group2: toCsv(params.group2Ids),
-        group3: toCsv(params.group3Ids),
+        group_level: params.groupLevel,
+        // Single-parent drill-down filters (integer, not CSV)
+        group1:      params.group1Id   ?? toCsv(params.group1Ids),
+        group2:      params.group2Id   ?? toCsv(params.group2Ids),
+        group3:      toCsv(params.group3Ids),
+        // Other filters
+        branch:      toCsv(params.branchIds),
+        region:      toCsv(params.regionIds),
+        year:        toCsv(params.years),
+        quarter:     toCsv(params.quarter),
+        month:       toCsv(params.month),
+        from_date:   params.fromDate,
+        to_date:     params.toDate,
       }),
     },
   );
-
   return response.data;
 };
 
