@@ -72,6 +72,38 @@ const LEVEL_COLORS: Record<DrillLevel, string> = {
   products: "var(--accent-cyan)",
 };
 
+// ─── Jitter helper ─────────────────────────────────────────────────────────────
+// Nudges overlapping points apart while preserving original values for tooltips.
+
+interface JitterInput {
+  x: number;
+  y: number;
+  xRange: number;
+  yRange: number;
+}
+
+function applyJitter<T extends JitterInput>(points: T[], minDistFraction = 0.055): T[] {
+  const placed: { x: number; y: number }[] = [];
+  return points.map((p) => {
+    let x = p.x;
+    let y = p.y;
+    let attempts = 0;
+    while (attempts < 80) {
+      const tooClose = placed.some((q) => {
+        const dx = p.xRange > 0 ? (x - q.x) / p.xRange : 0;
+        const dy = p.yRange > 0 ? (y - q.y) / p.yRange : 0;
+        return Math.sqrt(dx * dx + dy * dy) < minDistFraction;
+      });
+      if (!tooClose) break;
+      x = p.x + (Math.random() - 0.5) * p.xRange * 0.09;
+      y = p.y + (Math.random() - 0.5) * p.yRange * 0.18;
+      attempts++;
+    }
+    placed.push({ x, y });
+    return { ...p, x, y };
+  });
+}
+
 // ─── Breadcrumb ────────────────────────────────────────────────────────────────
 
 function Breadcrumb({
@@ -114,7 +146,6 @@ function Breadcrumb({
           minWidth: 0,
         }}
       >
-        {/* Home / root */}
         <button
           onClick={() => onNavigate(-1)}
           style={{
@@ -137,7 +168,6 @@ function Breadcrumb({
           الكل
         </button>
 
-        {/* Trail items */}
         {trail.map((item, i) => {
           const isLast = i === trail.length - 1;
           return (
@@ -145,7 +175,6 @@ function Breadcrumb({
               key={i}
               style={{ display: "flex", alignItems: "center", flexShrink: isLast ? 1 : 0 }}
             >
-              {/* Separator arrow */}
               <ChevronRight
                 size={11}
                 style={{
@@ -156,9 +185,7 @@ function Breadcrumb({
                   opacity: 0.5,
                 }}
               />
-
               {isLast ? (
-                /* Current (last) item — styled as active pill */
                 <span
                   style={{
                     color: "var(--text-primary)",
@@ -179,7 +206,6 @@ function Breadcrumb({
                   {item.label}
                 </span>
               ) : (
-                /* Ancestor item — clickable link */
                 <button
                   onClick={() => onNavigate(i)}
                   style={{
@@ -207,38 +233,15 @@ function Breadcrumb({
       </div>
 
       {/* ── Right: level badge + hints + reset ──────────────────────────────── */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          flexShrink: 0,
-        }}
-      >
-        {/* Loading spinner */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
         {isLoading && (
-          <Loader2
-            size={11}
-            className="animate-spin"
-            style={{ color: "var(--text-muted)" }}
-          />
+          <Loader2 size={11} className="animate-spin" style={{ color: "var(--text-muted)" }} />
         )}
-
-        {/* Drill hint — only when not at products level and there is data */}
         {!isLoading && hasData && currentLevel !== "products" && (
-          <span
-            style={{
-              fontSize: 9,
-              color: "var(--text-muted)",
-              whiteSpace: "nowrap",
-              opacity: 0.7,
-            }}
-          >
+          <span style={{ fontSize: 9, color: "var(--text-muted)", whiteSpace: "nowrap", opacity: 0.7 }}>
             انقر للتعمق ↓
           </span>
         )}
-
-        {/* Current level badge */}
         <span
           style={{
             fontSize: 9,
@@ -254,8 +257,6 @@ function Breadcrumb({
         >
           {LEVEL_LABELS[currentLevel]}
         </span>
-
-        {/* Reset — only when drilled in */}
         {trail.length > 0 && (
           <button
             onClick={onReset}
@@ -433,19 +434,61 @@ const SalesVolumeVsProfitMargin = () => {
     [trail, handleReset],
   );
 
-  // ── Chart data ──────────────────────────────────────────────────────────────
+  // ── Chart data with jitter ──────────────────────────────────────────────────
   const chartData = useMemo(() => {
-    if (!data?.data) return [];
-    return data.data.map((item) => [item.net_sales, item.profit_margin, item.name, item.id]);
+    if (!data?.data || data.data.length === 0) return [];
+
+    const raw = data.data;
+    const xs = raw.map((d) => d.net_sales);
+    const ys = raw.map((d) => d.profit_margin);
+    const xRange = Math.max(...xs) - Math.min(...xs) || 1;
+    const yRange = Math.max(...ys) - Math.min(...ys) || 1;
+
+    // Build jitter-ready inputs preserving original values
+    const inputs = raw.map((item) => ({
+      x: item.net_sales,
+      y: item.profit_margin,
+      origX: item.net_sales,
+      origY: item.profit_margin,
+      xRange,
+      yRange,
+      name: item.name,
+      id: item.id,
+    }));
+
+    const jittered = applyJitter(inputs);
+
+    // ECharts expects [jitteredX, jitteredY, name, id, origX, origY]
+    return jittered.map((p) => [p.x, p.y, p.name, p.id, p.origX, p.origY]);
   }, [data]);
+
+  // ── Axis padding — extra breathing room so edge points are never clipped ────
+  const axisBounds = useMemo(() => {
+    if (chartData.length === 0) return {};
+    const xs = chartData.map((d) => d[0] as number);
+    const ys = chartData.map((d) => d[1] as number);
+    const xMin = Math.min(...xs);
+    const xMax = Math.max(...xs);
+    const yMin = Math.min(...ys);
+    const yMax = Math.max(...ys);
+    const xPad = (xMax - xMin) * 0.2 || 100_000;
+    const yPad = (yMax - yMin) * 0.25 || 5;
+    return {
+      xMin: Math.max(0, xMin - xPad),
+      xMax: xMax + xPad,
+      yMin: Math.max(0, yMin - yPad),
+      yMax: yMax + yPad,
+    };
+  }, [chartData]);
 
   // ── Chart option ────────────────────────────────────────────────────────────
   const scatterOption = useMemo(
     () => ({
       tooltip: {
         trigger: "item" as const,
-        formatter: (p: { data: [number, number, string, number] }) =>
-          `<b>${p.data[2]}</b><br/>صافي المبيعات: ${fmtK(p.data[0])}<br/>هامش الربح: ${p.data[1].toFixed(2)}%`,
+        // Show ORIGINAL (pre-jitter) values in tooltip
+        formatter: (p: { data: [number, number, string, number, number, number] }) =>
+          `<b>${p.data[2]}</b><br/>صافي المبيعات: ${fmtK(p.data[4] ?? p.data[0])}<br/>هامش الربح: ${(p.data[5] ?? p.data[1]).toFixed(2)}%`,
       },
       xAxis: {
         name: "صافي المبيعات",
@@ -453,6 +496,8 @@ const SalesVolumeVsProfitMargin = () => {
         nameLocation: "middle" as const,
         nameGap: 32,
         nameTextStyle: { fontSize: 9 },
+        min: axisBounds.xMin,
+        max: axisBounds.xMax,
         axisLabel: { formatter: (v: number) => fmtK(v), fontSize: 9 },
         axisTick: { show: false },
         axisLine: { show: true, lineStyle: { width: 2, color: spineColor } },
@@ -467,6 +512,8 @@ const SalesVolumeVsProfitMargin = () => {
         nameLocation: "middle" as const,
         nameGap: 40,
         nameTextStyle: { fontSize: 9 },
+        min: axisBounds.yMin,
+        max: axisBounds.yMax,
         axisLabel: { formatter: "{value}%", fontSize: 9 },
         axisTick: { show: false },
         axisLine: { show: true, lineStyle: { width: 2, color: spineColor } },
@@ -478,18 +525,19 @@ const SalesVolumeVsProfitMargin = () => {
       series: [
         {
           type: "scatter",
-          symbolSize: 16,
+          // Larger symbols so every point is easy to click/see
+          symbolSize: 18,
           data: chartData,
           itemStyle: {
             color: (p: { dataIndex: number }) => catColors[p.dataIndex % catColors.length],
-            opacity: 0.88,
+            opacity: 0.9,
             borderWidth: level !== "products" ? 1.5 : 0,
-            borderColor: "rgba(255,255,255,0.3)",
+            borderColor: "rgba(255,255,255,0.35)",
           },
           cursor: level !== "products" ? "pointer" : "default",
           label: { show: false },
           emphasis: {
-            scale: 1.15,
+            scale: 1.2,
             label: {
               show: true,
               formatter: (p: { data: (number | string)[] }) => {
@@ -503,9 +551,9 @@ const SalesVolumeVsProfitMargin = () => {
           },
         },
       ],
-      grid: { ...productsStandardGrid, left: "6%" },
+      grid: { ...productsStandardGrid, left: "6%", containLabel: true },
     }),
-    [chartData, catColors, splitLineColor, spineColor, level],
+    [chartData, catColors, splitLineColor, spineColor, level, axisBounds],
   );
 
   // ── States ──────────────────────────────────────────────────────────────────

@@ -8,7 +8,7 @@ import {
 import AnalyticsTableCard from "@/components/ui/AnalyticsTableCard";
 import { useDetailedTimeSales } from "@/hooks/useSalesAnalyses";
 import { useFilterStore } from "@/store/filterStore";
-import { ChevronDown, TrendingDown, TrendingUp } from "lucide-react";
+import { AlertTriangle, ChevronDown, RefreshCw, TrendingDown, TrendingUp } from "lucide-react";
 import { Fragment, useMemo, useState } from "react";
 import {
   headers,
@@ -272,48 +272,135 @@ function AccordionLabelCell({
   );
 }
 
-// ── SkeletonRows Sub-component ─────────────────────────────────────────────────
+// ── ErrorRow Sub-component ─────────────────────────────────────────────────────
+// Shown inline inside the table when the fetch fails — keeps the table chrome
+// visible so the user has context, and exposes a one-click Retry action.
 
-function SkeletonRows() {
+function ErrorRow({
+  colSpan,
+  failureCount,
+  isRefetching,
+  onRetry,
+}: {
+  colSpan: number;
+  failureCount: number;
+  isRefetching: boolean;
+  onRetry: () => void;
+}) {
   return (
-    <>
-      {[...Array(4)].map((_, i) => (
-        <tr
-          key={i}
-          style={{ background: i % 2 === 0 ? "var(--bg-elevated)" : undefined }}
+    <tr>
+      <td colSpan={colSpan} style={{ padding: "20px 16px" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 10,
+            padding: "12px 16px",
+            borderRadius: 8,
+            background: "color-mix(in srgb, var(--accent-red) 8%, transparent)",
+            border: "1px solid color-mix(in srgb, var(--accent-red) 22%, transparent)",
+          }}
         >
-          {[...Array(7)].map((__, j) => (
-            <td
-              key={j}
-              style={analyticsTdBaseStyle(j === 0 ? "right" : "center")}
-            >
-              <div
-                style={{
-                  height: 10,
-                  borderRadius: 4,
-                  width: j === 0 ? 80 : 60,
-                  background: "var(--bg-elevated)",
-                  animation: "pulse 1.5s ease-in-out infinite",
-                  margin: "0 auto",
-                }}
-              />
-            </td>
-          ))}
-        </tr>
-      ))}
-    </>
+          <AlertTriangle
+            size={14}
+            style={{ color: "var(--accent-red)", flexShrink: 0 }}
+          />
+          <span
+            style={{
+              fontSize: 11,
+              color: "var(--accent-red)",
+              fontWeight: 600,
+            }}
+          >
+            {failureCount > 1
+              ? `تعذّر تحميل البيانات (${failureCount} محاولات)`
+              : "تعذّر تحميل البيانات"}
+          </span>
+          <button
+            type="button"
+            onClick={onRetry}
+            disabled={isRefetching}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+              padding: "3px 10px",
+              borderRadius: 5,
+              border: "1px solid color-mix(in srgb, var(--accent-red) 40%, transparent)",
+              background: "color-mix(in srgb, var(--accent-red) 12%, transparent)",
+              color: "var(--accent-red)",
+              fontSize: 10,
+              fontWeight: 700,
+              cursor: isRefetching ? "not-allowed" : "pointer",
+              opacity: isRefetching ? 0.6 : 1,
+              transition: "opacity 150ms ease",
+            }}
+          >
+            <RefreshCw
+              size={10}
+              style={{
+                animation: isRefetching ? "spin 0.8s linear infinite" : "none",
+              }}
+            />
+            {isRefetching ? "جاري الإعادة…" : "إعادة المحاولة"}
+          </button>
+        </div>
+        {/* Inline keyframe for the spinner — no extra CSS file needed */}
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </td>
+    </tr>
+  );
+}
+
+// ── RefreshBanner Sub-component ────────────────────────────────────────────────
+// Slim top-of-table banner shown during background refetches (stale-while-
+// revalidate). Much less intrusive than a full overlay.
+
+function RefreshBanner({ colSpan }: { colSpan: number }) {
+  return (
+    <tr>
+      <td
+        colSpan={colSpan}
+        style={{
+          padding: "3px 0",
+          background: "color-mix(in srgb, var(--accent-blue, #3b82f6) 6%, transparent)",
+          borderBottom: "1px solid color-mix(in srgb, var(--accent-blue, #3b82f6) 18%, transparent)",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 6,
+          }}
+        >
+          <RefreshCw
+            size={9}
+            style={{
+              color: "var(--accent-blue, #3b82f6)",
+              animation: "spin 0.9s linear infinite",
+            }}
+          />
+          <span
+            style={{
+              fontSize: 9,
+              fontWeight: 600,
+              color: "var(--accent-blue, #3b82f6)",
+              letterSpacing: "0.03em",
+            }}
+          >
+            جاري تحديث البيانات…
+          </span>
+        </div>
+      </td>
+    </tr>
   );
 }
 
 // ── Helper: build a full inclusive year array from a YYYY-MM-DD range ─────────
-//
-// deriveDateFilters() in GlobalFilterBar only extracts the FROM year and writes
-// it to store.year as a single string — the TO year is never stored separately.
-// So "2024-01 → 2026-12" ends up as year="2024", losing 2025 and 2026.
-//
-// Fix: read the raw dateRangeFrom / dateRangeTo strings (already in the store)
-// and derive the full inclusive array here, falling back to store.year when no
-// custom range is active (quick-period mode).
+
 function buildYearsArray(
   year: string,
   dateRangeFrom: string,
@@ -327,53 +414,42 @@ function buildYearsArray(
     : Number.NaN;
 
   if (!Number.isNaN(fromYear) && !Number.isNaN(toYear) && fromYear <= toYear) {
-    // Custom range: expand e.g. 2024→2026 into [2024, 2025, 2026]
     return Array.from(
       { length: toYear - fromYear + 1 },
       (_, i) => fromYear + i,
     );
   }
 
-  // Quick-period / single-year fallback
   const y = Number(year);
   return year && !Number.isNaN(y) ? [y] : undefined;
 }
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
+const COL_SPAN = 7;
+
 const DetailedTimeBasedSalesAnalysis = () => {
   const activeBranches  = useFilterStore((s) => s.activeBranches);
   const region          = useFilterStore((s) => s.region);
   const productCategory = useFilterStore((s) => s.productCategory);
   const subcategory     = useFilterStore((s) => s.subcategory);
-  // FIX 2: group3 is stored under the "product" key on the sales page
   const group3          = useFilterStore((s) => s.product);
   const agreement       = useFilterStore((s) => s.agreement);
   const year            = useFilterStore((s) => s.year);
-  // FIX 5: month + day act as queryKey discriminators for same-year period changes
   const month           = useFilterStore((s) => s.month);
   const day             = useFilterStore((s) => s.day);
-  // NEW: read the raw date range so we can expand multi-year selections
   const dateRangeFrom   = useFilterStore((s) => s.dateRangeFrom);
   const dateRangeTo     = useFilterStore((s) => s.dateRangeTo);
 
   const params = useMemo(
     () => ({
-      // FIX (year range): derive the full inclusive array — "2024 → 2026"
-      // now correctly produces [2024, 2025, 2026] instead of just [2024].
       years: buildYearsArray(year, dateRangeFrom, dateRangeTo),
-
       branchIds:   activeBranches.length > 0  ? activeBranches  : undefined,
       regionIds:   region.length > 0          ? region          : undefined,
       group1Ids:   productCategory.length > 0 ? productCategory : undefined,
       group2Ids:   subcategory.length > 0     ? subcategory     : undefined,
-      // FIX 2: pass group3 so the filter actually reaches the API
       group3Ids:   group3.length > 0          ? group3          : undefined,
-      // FIX 3: pass first agreement whenever ≥1 selected (not only when === 1)
       agreementId: agreement.length > 0       ? agreement[0]    : undefined,
-
-      // FIX 5: _month/_day are not sent to the API but change the queryKey so
-      // React Query refetches when the active period shifts within a year.
       _month: month,
       _day:   day,
     }),
@@ -392,11 +468,11 @@ const DetailedTimeBasedSalesAnalysis = () => {
   const {
     data: rawData,
     isLoading,
-    // FIX 4: isFetching is now consumed for a background-refresh indicator
     isFetching,
     isError,
+    refetch,
+    failureCount,
   } = useDetailedTimeSales(
-    // Strip internal discriminator fields before sending to the API
     {
       years:       params.years,
       branchIds:   params.branchIds,
@@ -406,8 +482,11 @@ const DetailedTimeBasedSalesAnalysis = () => {
       group3Ids:   params.group3Ids,
       agreementId: params.agreementId,
     },
-    { staleTime: 5 * 60 * 1000 },
+    { staleTime: 5 * 60 * 1000, retry: 2 },
   );
+
+  // Track whether a manual retry is in flight so the button gives feedback
+  const isRefetching = isFetching && isError;
 
   const salesAnalysisData = useMemo<SalesAnalysisYear[]>(
     () => (rawData ? transformDetailedTimeSales(rawData) : []),
@@ -469,23 +548,16 @@ const DetailedTimeBasedSalesAnalysis = () => {
       }
     >
       <AnalyticsTable headers={headers} minWidth={980}>
-        {/* ── FIX 4: background-refresh indicator while stale data is shown */}
-        {isFetching && !isLoading && (
-          <tr>
-            <td
-              colSpan={7}
-              style={{ padding: "4px 0", textAlign: "center" }}
-            >
-              <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
-                جاري التحديث…
-              </span>
-            </td>
-          </tr>
+
+        {/* Background refresh banner — only while stale data is already shown */}
+        {isFetching && !isLoading && !isError && (
+          <RefreshBanner colSpan={COL_SPAN} />
         )}
 
+        {/* Initial loading state */}
         {isLoading && salesAnalysisData.length === 0 && (
           <tr>
-            <td colSpan={7}>
+            <td colSpan={COL_SPAN}>
               <AnalyticsLoader
                 variant="compact"
                 title="جاري تحميل التحليل الزمني"
@@ -494,26 +566,21 @@ const DetailedTimeBasedSalesAnalysis = () => {
           </tr>
         )}
 
+        {/* Error state — inline with retry + failure count feedback */}
         {isError && !isLoading && (
-          <tr>
-            <td
-              colSpan={7}
-              style={{
-                textAlign: "center",
-                padding: 24,
-                color: "var(--accent-red)",
-                fontSize: 12,
-              }}
-            >
-              حدث خطأ أثناء تحميل البيانات
-            </td>
-          </tr>
+          <ErrorRow
+            colSpan={COL_SPAN}
+            failureCount={failureCount}
+            isRefetching={isRefetching}
+            onRetry={() => refetch()}
+          />
         )}
 
+        {/* Empty state */}
         {!isLoading && !isError && salesAnalysisData.length === 0 && (
           <tr>
             <td
-              colSpan={7}
+              colSpan={COL_SPAN}
               style={{
                 textAlign: "center",
                 padding: 24,
@@ -526,8 +593,9 @@ const DetailedTimeBasedSalesAnalysis = () => {
           </tr>
         )}
 
+        {/* Data rows */}
         {salesAnalysisData.map((year) => {
-          const yearMetrics  = getRollupMetrics(getYearMonths(year));
+          const yearMetrics    = getRollupMetrics(getYearMonths(year));
           const isYearExpanded = expandedYears.has(year.year);
 
           return (
@@ -551,8 +619,8 @@ const DetailedTimeBasedSalesAnalysis = () => {
 
               {isYearExpanded &&
                 year.quarters.map((quarter) => {
-                  const quarterKey     = `${year.year}-${quarter.id}`;
-                  const quarterMetrics = getRollupMetrics(getQuarterMonths(quarter));
+                  const quarterKey        = `${year.year}-${quarter.id}`;
+                  const quarterMetrics    = getRollupMetrics(getQuarterMonths(quarter));
                   const isQuarterExpanded = expandedQuarters.has(quarterKey);
 
                   return (

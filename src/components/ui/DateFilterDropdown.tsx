@@ -28,12 +28,12 @@ export function DateFilterDropdown({
   useMonthRangePickers?: boolean;
   fillQuickPeriodDates?: (value: string) => { from: string; to: string } | null;
   rangeGranularity?: "month" | "day";
-  onApply?: (from: string, to: string) => void;
+  onApply?: () => void; // ← FIX: no args — only called from فترة محددة "تطبيق"
 }) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"quick" | "range">("quick");
 
-  // ── draft state: only written to parent when تطبيق is pressed ──────────────
+  // Draft state: only committed to parent when تطبيق is pressed
   const [draftFrom, setDraftFrom] = useState("");
   const [draftTo, setDraftTo] = useState("");
 
@@ -49,11 +49,17 @@ export function DateFilterDropdown({
     setOpen((p) => !p);
   };
 
+  // ── FIX: label logic ────────────────────────────────────────────────────────
+  // 1. If a known quick period is active → show its label (e.g. "هذا الشهر")
+  // 2. If in custom-range mode (activePeriod === "custom-range") and dates exist → show range string
+  // 3. Fallback → "التاريخ"
+  const quickLabel = quickPeriodOptions.find((p) => p.value === activePeriod)?.label;
+
   const label =
-    mode === "range" && dateFrom
+    quickLabel ??
+    (activePeriod === "custom-range" && (dateFrom || dateTo)
       ? `${dateFrom}${dateTo ? " → " + dateTo : ""}`
-      : (quickPeriodOptions.find((p) => p.value === activePeriod)?.label ??
-        "التاريخ");
+      : "التاريخ");
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
@@ -124,7 +130,7 @@ export function DateFilterDropdown({
 
             <div style={{ padding: "8px" }}>
               {mode === "quick" ? (
-                /* ── Quick period buttons — exactly as original ── */
+                /* ── Quick period buttons ── */
                 <div
                   style={{
                     display: "grid",
@@ -136,20 +142,23 @@ export function DateFilterDropdown({
                     <button
                       key={p.value}
                       onClick={() => {
+                        // ── FIX: only call setActivePeriod (→ handleQuickPeriodChange).
+                        // That handler resolves the date range and commits it.
+                        // Do NOT call onApply here — onApply is exclusively for
+                        // the فترة محددة "تطبيق" button and would incorrectly set
+                        // isCustomRangeMode=true, overwriting activePeriod with
+                        // "custom-range" and breaking the label.
                         setActivePeriod(p.value);
 
+                        // Still fill the date inputs for pages that need them
+                        // displayed (non-committing — GlobalFilterBar handles commit)
                         const filled = fillQuickPeriodDates?.(p.value);
-
                         if (filled?.from && filled?.to) {
                           setDateFrom(filled.from);
                           setDateTo(filled.to);
-
-                          onApply?.(filled.from, filled.to);
                         } else {
                           setDateFrom("");
                           setDateTo("");
-
-                          onApply?.("", "");
                         }
 
                         setOpen(false);
@@ -160,7 +169,11 @@ export function DateFilterDropdown({
                           activePeriod === p.value
                             ? "rgba(0,229,160,0.12)"
                             : "var(--bg-elevated)",
-                        border: `1px solid ${activePeriod === p.value ? "var(--accent-green)" : "var(--border-subtle)"}`,
+                        border: `1px solid ${
+                          activePeriod === p.value
+                            ? "var(--accent-green)"
+                            : "var(--border-subtle)"
+                        }`,
                         color:
                           activePeriod === p.value
                             ? "var(--accent-green)"
@@ -212,7 +225,7 @@ export function DateFilterDropdown({
                       );
                     }
 
-                    // month/year picker
+                    // month picker
                     const ym =
                       f.val && f.val.length >= 7 ? f.val.slice(0, 7) : "";
 
@@ -272,14 +285,19 @@ export function DateFilterDropdown({
                   {(draftFrom || draftTo) && (
                     <button
                       onClick={() => {
-                        // 1. Commit drafts → parent state (this is what drives useEffects in GlobalFilterBar)
+                        // 1. Commit drafts → parent state
                         setDateFrom(draftFrom);
                         setDateTo(draftTo);
-                        // 2. Sync store + mark applied — exactly as original
+                        // 2. Sync store + mark applied
                         useFilterStore
                           .getState()
                           .setDateRange(draftFrom, draftTo);
                         useFilterStore.getState().applyDateRange();
+                        // 3. ── FIX: call onApply with no args — GlobalFilterBar's
+                        //    handleCustomRangeApply sets isCustomRangeMode=true and
+                        //    switches activePeriod to "custom-range" so the label
+                        //    renders the date range string instead of a chip label.
+                        onApply?.();
                         setOpen(false);
                       }}
                       style={{
